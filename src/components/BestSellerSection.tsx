@@ -1,13 +1,14 @@
 "use client";
 
 import React from "react";
-import { SOAPS } from "@/data/soaps";
+import { useStore } from "@/context/StoreContext";
 import ProductCard from "./ProductCard";
 import { Award } from "lucide-react";
 
 export default function BestSellerSection() {
+  const { products } = useStore();
   // Grab precisely the top 4 bestseller soaps for the 1-row 4-card layout
-  const bestSellers = SOAPS.filter((s) => s.isBestseller).slice(0, 4);
+  const bestSellers = products.filter((s) => s.isBestseller).slice(0, 4);
 
   return (
     <section id="bestsellers" className="bestsellers-section" aria-label="Best Sellers">

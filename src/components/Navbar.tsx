@@ -3,16 +3,18 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Search, ShoppingBag, Heart, Menu, X, Sparkles, ChevronDown } from "lucide-react";
+import { Search, ShoppingBag, Menu, X, Sparkles, ChevronDown, User } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { SOAPS, FESTIVAL_PROMO, CATEGORIES_DATA, Soap } from "@/data/soaps";
+import { useStore } from "@/context/StoreContext";
+import { FESTIVAL_PROMO, Soap } from "@/data/soaps";
 
 interface NavbarProps {
   onSearchChange?: (query: string) => void;
 }
 
 export default function Navbar({ onSearchChange }: NavbarProps) {
-  const { cartCount, wishlist, setIsCartOpen, setQuickViewSoap, showToast } = useCart();
+  const { cartCount, setIsCartOpen, setQuickViewSoap } = useCart();
+  const { products, categories, currentUser } = useStore();
   const [isScrolled, setIsScrolled] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Soap[]>([]);
@@ -34,7 +36,7 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
     if (onSearchChange) onSearchChange(val);
 
     if (val.trim().length > 1) {
-      const filtered = SOAPS.filter(
+      const filtered = products.filter(
         (s) =>
           s.name.toLowerCase().includes(val.toLowerCase()) ||
           s.mainCategory.toLowerCase().includes(val.toLowerCase()) ||
@@ -58,7 +60,7 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
 
   return (
     <>
-      {/* Top Festival Announcement Bar */}
+      {/* Top Festival Announcement Bar with Indian Rupee threshold */}
       <div className="announcement-bar" role="region" aria-label="Special Offers">
         <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: "0.5rem" }}>
           <span>
@@ -66,7 +68,7 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
             GRAND FESTIVE CELEBRATION: CODE <strong style={{ letterSpacing: "0.08em" }}>{FESTIVAL_PROMO.code}</strong> FOR 25% OFF
           </span>
           <span className="badge-pill">LIMITED TIME</span>
-          <span>FREE KEEPSAKE BOX ON ORDERS $50+</span>
+          <span>FREE KEEPSAKE BOX ON ORDERS ₹1,499+</span>
         </div>
       </div>
 
@@ -92,24 +94,24 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
               </div>
             </Link>
 
-            {/* Desktop Navigation Links with Category Dropdown */}
-            <div style={{ display: "flex", alignItems: "center", gap: "1.75rem" }} className="desktop-links-container">
-              <Link href="/#bestsellers" className="nav-link">
-                Best Sellers
-              </Link>
-              <Link href="/#festival-offers" className="nav-link" style={{ display: "flex", alignItems: "center" }}>
-                Festival Offers
-                <span className="nav-festive-badge">25% OFF</span>
+            {/* Desktop Navigation Links: Home, About Us, Collection, Festival Offers, Contact Us */}
+            <div className="desktop-links-container">
+              <Link href="/" className="nav-link">
+                Home
               </Link>
 
-              {/* Categories Link with Hover Menu */}
+              <Link href="/about" className="nav-link">
+                About Us
+              </Link>
+
+              {/* Collection Link with Hover Menu */}
               <div
                 style={{ position: "relative" }}
                 onMouseEnter={() => setIsCategoryMenuOpen(true)}
                 onMouseLeave={() => setIsCategoryMenuOpen(false)}
               >
                 <Link href="/#all-soaps" className="nav-link" style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                  Categories <ChevronDown size={14} />
+                  Collection <ChevronDown size={14} />
                 </Link>
 
                 {isCategoryMenuOpen && (
@@ -127,7 +129,7 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                       zIndex: 90,
                     }}
                   >
-                    {CATEGORIES_DATA.filter((c) => c.id !== "all").map((cat) => (
+                    {categories.filter((c) => c.id !== "all").map((cat) => (
                       <Link
                         key={cat.id}
                         href="/#all-soaps"
@@ -154,11 +156,29 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                 )}
               </div>
 
-              <Link href="/#ritual" className="nav-link">
-                The Ritual
+              <Link href="/#festival-offers" className="nav-link" style={{ display: "flex", alignItems: "center" }}>
+                Festival Offers
+                <span className="nav-festive-badge">25% OFF</span>
               </Link>
-              <Link href="/#reviews" className="nav-link">
-                Reviews
+
+              <Link href="/contact" className="nav-link">
+                Contact Us
+              </Link>
+
+              <Link
+                href="/admin"
+                className="nav-link"
+                style={{
+                  fontSize: "0.78rem",
+                  padding: "0.25rem 0.65rem",
+                  borderRadius: "9999px",
+                  border: "1px dashed var(--color-border)",
+                  color: "var(--color-text-secondary)",
+                  transition: "all 0.15s ease",
+                }}
+                title="Open Star Light Co. Admin Panel"
+              >
+                ⚙️ Admin
               </Link>
             </div>
 
@@ -225,7 +245,7 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                             {soap.name}
                           </div>
                           <div style={{ fontSize: "0.74rem", color: "var(--color-terracotta)", fontWeight: 700 }}>
-                            ${soap.price.toFixed(2)} • {soap.subCategory}
+                            ₹{soap.price.toLocaleString("en-IN")} • {soap.subCategory}
                           </div>
                         </div>
                       </div>
@@ -233,23 +253,6 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                   </div>
                 )}
               </div>
-
-              {/* Wishlist Button */}
-              <button
-                type="button"
-                className="action-btn"
-                onClick={() => {
-                  if (wishlist.length === 0) {
-                    showToast("Your wishlist is empty. Tap the heart on any soap!");
-                  } else {
-                    showToast(`You have ${wishlist.length} item(s) in your wishlist ❤️`);
-                  }
-                }}
-                aria-label={`Wishlist items: ${wishlist.length}`}
-              >
-                <Heart size={18} />
-                {wishlist.length > 0 && <span className="action-badge">{wishlist.length}</span>}
-              </button>
 
               {/* Cart Drawer Trigger */}
               <button
@@ -260,18 +263,43 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
               >
                 <ShoppingBag size={17} />
                 <span style={{ display: "none" }} className="cart-text-label">Bag</span>
-                <span
+                  <span
+                    style={{
+                      background: "rgba(255, 255, 255, 0.28)",
+                      padding: "0.1rem 0.5rem",
+                      borderRadius: "9999px",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {cartCount}
+                  </span>
+                </button>
+
+                {/* Patron Account / Login Trigger */}
+                <Link
+                  href="/login"
                   style={{
-                    background: "rgba(255, 255, 255, 0.28)",
-                    padding: "0.1rem 0.5rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    fontSize: "0.84rem",
+                    fontWeight: 600,
+                    color: "var(--color-dragon-black)",
+                    padding: "0.45rem 0.75rem",
                     borderRadius: "9999px",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
+                    border: "1px solid var(--color-border)",
+                    backgroundColor: "rgba(255, 255, 255, 0.7)",
+                    textDecoration: "none",
+                    transition: "all 0.2s ease",
                   }}
+                  title={currentUser ? `Signed in as ${currentUser.name}` : "Patron Sign In / Register"}
                 >
-                  {cartCount}
-                </span>
-              </button>
+                  <User size={15} color="var(--color-terracotta)" />
+                  <span style={{ display: "none" }} className="cart-text-label">
+                    {currentUser ? currentUser.name.split(" ")[0] : "Sign In"}
+                  </span>
+                </Link>
 
               {/* Mobile Menu Button */}
               <button
@@ -312,40 +340,55 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", fontSize: "0.95rem", fontWeight: 700 }}>
               <Link
-                href="/#bestsellers"
+                href="/"
                 onClick={() => setIsMobileMenuOpen(false)}
                 style={{ padding: "0.45rem 0", borderBottom: "1px solid var(--color-cream-subtle)" }}
               >
-                Best Sellers
+                Home
               </Link>
               <Link
-                href="/#festival-offers"
+                href="/about"
                 onClick={() => setIsMobileMenuOpen(false)}
-                style={{ padding: "0.45rem 0", color: "var(--color-terracotta)", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                style={{ padding: "0.45rem 0", borderBottom: "1px solid var(--color-cream-subtle)" }}
               >
-                <span>Festival Offers</span>
-                <span className="nav-festive-badge">25% OFF</span>
+                About Us
               </Link>
               <Link
                 href="/#all-soaps"
                 onClick={() => setIsMobileMenuOpen(false)}
                 style={{ padding: "0.45rem 0", borderBottom: "1px solid var(--color-cream-subtle)" }}
               >
-                Categories &amp; Subcategories
+                Collection
               </Link>
               <Link
-                href="/#ritual"
+                href="/#festival-offers"
+                onClick={() => setIsMobileMenuOpen(false)}
+                style={{ padding: "0.45rem 0", color: "var(--color-terracotta)", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--color-cream-subtle)" }}
+              >
+                <span>Festival Offers</span>
+                <span className="nav-festive-badge">25% OFF</span>
+              </Link>
+              <Link
+                href="/contact"
                 onClick={() => setIsMobileMenuOpen(false)}
                 style={{ padding: "0.45rem 0", borderBottom: "1px solid var(--color-cream-subtle)" }}
               >
-                The Soap Ritual
+                Contact Us
               </Link>
               <Link
-                href="/#reviews"
+                href="/login"
                 onClick={() => setIsMobileMenuOpen(false)}
-                style={{ padding: "0.45rem 0" }}
+                style={{ padding: "0.45rem 0", display: "flex", alignItems: "center", gap: "6px", borderBottom: "1px solid var(--color-cream-subtle)" }}
               >
-                Customer Reviews
+                <User size={16} color="var(--color-terracotta)" />
+                <span>{currentUser ? `Account (${currentUser.name})` : "Patron Sign In / Register"}</span>
+              </Link>
+              <Link
+                href="/admin"
+                onClick={() => setIsMobileMenuOpen(false)}
+                style={{ padding: "0.45rem 0", color: "var(--color-terracotta)", display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <span>⚙️ Admin Panel</span>
               </Link>
             </div>
           </div>
@@ -358,7 +401,7 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
             display: none !important;
           }
         }
-        @media (min-width: 600px) {
+        @media (min-width: 1200px) {
           .cart-text-label {
             display: inline !important;
           }

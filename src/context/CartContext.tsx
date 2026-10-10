@@ -17,6 +17,8 @@ interface CartContextType {
   cartCount: number;
   subtotal: number;
   discountAmount: number;
+  taxAmount: number;
+  hasExclusiveTax: boolean;
   total: number;
   freeShippingProgress: number;
   appliedPromo: string | null;
@@ -30,8 +32,12 @@ interface CartContextType {
   setIsCartOpen: (open: boolean) => void;
   quickViewSoap: Soap | null;
   setQuickViewSoap: (soap: Soap | null) => void;
+  enquirySoap: Soap | null;
+  setEnquirySoap: (soap: Soap | null) => void;
   toast: string | null;
   showToast: (message: string) => void;
+  selectedState: string;
+  setSelectedState: (state: string) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -43,7 +49,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [quickViewSoap, setQuickViewSoap] = useState<Soap | null>(null);
+  const [enquirySoap, setEnquirySoap] = useState<Soap | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [selectedState, setSelectedState] = useState<string>("Maharashtra");
 
   // Initialize from localStorage if available
   useEffect(() => {
@@ -53,6 +61,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
       const savedWishlist = localStorage.getItem("starlight_wishlist");
       if (savedWishlist) setWishlist(JSON.parse(savedWishlist));
+
+      const savedState = localStorage.getItem("starlight_selected_state");
+      if (savedState) setSelectedState(savedState);
     } catch {
       // ignore SSR/storage errors
     }
@@ -156,9 +167,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     0
   );
 
+  // Calculate tax for products marked as tax-exclusive
+  const taxAmount = cart.reduce((acc, item) => {
+    if (item.soap.taxType === "exclusive") {
+      const rate = typeof item.soap.taxRate === "number" ? item.soap.taxRate : 18;
+      return acc + (item.soap.price * (rate / 100)) * item.quantity;
+    }
+    return acc;
+  }, 0);
+
+  const hasExclusiveTax = cart.some((item) => item.soap.taxType === "exclusive");
+
   const discountPercent = appliedPromo === FESTIVAL_PROMO.code ? 0.25 : 0;
   const discountAmount = subtotal * discountPercent;
-  const total = Math.max(0, subtotal - discountAmount);
+  const total = Math.max(0, subtotal - discountAmount + taxAmount);
 
   const freeShippingProgress = Math.min(
     100,
@@ -176,6 +198,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         cartCount,
         subtotal,
         discountAmount,
+        taxAmount,
+        hasExclusiveTax,
         total,
         freeShippingProgress,
         appliedPromo,
@@ -189,8 +213,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setIsCartOpen,
         quickViewSoap,
         setQuickViewSoap,
+        enquirySoap,
+        setEnquirySoap,
         toast,
         showToast,
+        selectedState,
+        setSelectedState: (state: string) => {
+          setSelectedState(state);
+          try {
+            localStorage.setItem("starlight_selected_state", state);
+          } catch {}
+        },
       }}
     >
       {children}

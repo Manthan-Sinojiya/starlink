@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { CartProvider } from "@/context/CartContext";
+import { StoreProvider } from "@/context/StoreContext";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -82,7 +83,9 @@ export default function RootLayout({
         <link rel="icon" href="/images/logo.png" />
       </head>
       <body>
-        <CartProvider>{children}</CartProvider>
+        <StoreProvider>
+          <CartProvider>{children}</CartProvider>
+        </StoreProvider>
       </body>
     </html>
   );

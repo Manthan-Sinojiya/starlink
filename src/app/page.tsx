@@ -6,6 +6,7 @@ import HeroSection from "@/components/HeroSection";
 import CategoryCardsSection from "@/components/CategoryCardsSection";
 import BestSellerSection from "@/components/BestSellerSection";
 import FestivalOfferSection from "@/components/FestivalOfferSection";
+import SecondaryOfferSection from "@/components/SecondaryOfferSection";
 import SoapRitualSection from "@/components/SoapRitualSection";
 import AllSoapsSection from "@/components/AllSoapsSection";
 import CustomerReviewsSection from "@/components/CustomerReviewsSection";
@@ -13,8 +14,8 @@ import FollowUsSection from "@/components/FollowUsSection";
 import Footer from "@/components/Footer";
 import CartDrawer from "@/components/CartDrawer";
 import QuickViewModal from "@/components/QuickViewModal";
+import WhatsAppEnquiryModal from "@/components/WhatsAppEnquiryModal";
 import Toast from "@/components/Toast";
-import LiveSalesToast from "@/components/LiveSalesToast";
 import SeoStructuredData from "@/components/SeoStructuredData";
 
 export default function HomePage() {
@@ -42,6 +43,9 @@ export default function HomePage() {
           {/* 4. Festival Offer Section with Live Countdown & Box Inspector */}
           <FestivalOfferSection />
 
+          {/* 4b. Secondary Promotional Curation Section */}
+          <SecondaryOfferSection />
+
           {/* 5. The Soap Ritual & Cold Process Philosophy */}
           <SoapRitualSection />
 
@@ -62,8 +66,8 @@ export default function HomePage() {
       {/* Floating & Interactive Overlays */}
       <CartDrawer />
       <QuickViewModal />
+      <WhatsAppEnquiryModal />
       <Toast />
-      <LiveSalesToast />
     </>
   );
 }

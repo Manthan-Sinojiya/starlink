@@ -187,11 +187,11 @@ export default function SoapFinderWidget() {
 
               <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", marginBottom: "1.25rem" }}>
                 <span style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--color-dragon-black)" }}>
-                  ${matchedSoap.price.toFixed(2)}
+                  ₹{matchedSoap.price.toLocaleString("en-IN")}
                 </span>
                 {matchedSoap.originalPrice && (
                   <span style={{ textDecoration: "line-through", color: "var(--color-text-tertiary)", fontSize: "0.9rem" }}>
-                    ${matchedSoap.originalPrice.toFixed(2)}
+                    ₹{matchedSoap.originalPrice.toLocaleString("en-IN")}
                   </span>
                 )}
               </div>

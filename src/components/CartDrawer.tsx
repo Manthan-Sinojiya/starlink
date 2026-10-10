@@ -2,9 +2,10 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Tag, Sparkles, Check } from "lucide-react";
+import { X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Tag, Sparkles, Check, MapPin } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { FESTIVAL_PROMO } from "@/data/soaps";
+import { useStore } from "@/context/StoreContext";
+import { FESTIVAL_PROMO, INDIAN_STATES } from "@/data/soaps";
 
 export default function CartDrawer() {
   const {
@@ -15,6 +16,8 @@ export default function CartDrawer() {
     updateQuantity,
     subtotal,
     discountAmount,
+    taxAmount,
+    hasExclusiveTax,
     total,
     freeShippingProgress,
     appliedPromo,
@@ -23,11 +26,19 @@ export default function CartDrawer() {
     removePromo,
     clearCart,
     showToast,
+    selectedState,
+    setSelectedState,
   } = useCart();
+
+  const { calculateShipping, shippingSettings, createOrder, currentUser } = useStore();
 
   const [inputCode, setInputCode] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
+  const [confirmedOrderNumber, setConfirmedOrderNumber] = useState<string>("");
+  const [customerName, setCustomerName] = useState(currentUser?.name || "");
+  const [customerEmail, setCustomerEmail] = useState(currentUser?.email || "");
+  const [shippingAddress, setShippingAddress] = useState(currentUser?.address || "");
 
   const handleApplyPromo = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,18 +48,44 @@ export default function CartDrawer() {
     }
   };
 
+  const shippingCost = calculateShipping(subtotal, selectedState);
+  const isFreeShipping = shippingCost === 0;
+  const grandTotal = subtotal === 0 ? 0 : total + shippingCost;
+
   const handleCheckout = () => {
     setIsCheckingOut(true);
     setTimeout(() => {
+      // Record order in store
+      const order = createOrder({
+        customerName: customerName.trim() || currentUser?.name || "Guest Patron",
+        customerEmail: customerEmail.trim() || currentUser?.email || "guest@starlightsoaps.com",
+        customerPhone: currentUser?.phone || "+91 98765 00000",
+        shippingAddress: shippingAddress.trim() || currentUser?.address || `Delivery Address in ${selectedState}`,
+        shippingState: selectedState,
+        shippingPincode: currentUser?.pincode || "400001",
+        items: cart.map((item) => ({
+          productId: item.soap.id,
+          name: item.soap.name,
+          image: item.soap.image,
+          price: item.soap.price,
+          weight: item.soap.weight,
+          quantity: item.quantity,
+        })),
+        subtotal,
+        taxAmount,
+        shippingCost,
+        discountAmount,
+        total: grandTotal,
+        status: "Processing",
+        paymentMethod: "UPI",
+      });
+
       setIsCheckingOut(false);
+      setConfirmedOrderNumber(order.orderNumber);
       setOrderComplete(true);
       clearCart();
-    }, 1800);
+    }, 1200);
   };
-
-  const isFreeShipping = subtotal >= FESTIVAL_PROMO.freeShippingThreshold;
-  const shippingCost = isFreeShipping || subtotal === 0 ? 0 : 5.0;
-  const grandTotal = total + shippingCost;
 
   return (
     <>
@@ -86,7 +123,7 @@ export default function CartDrawer() {
           </button>
         </div>
 
-        {/* Free Shipping Progress */}
+        {/* Free Shipping Progress in Indian Rupees */}
         <div className="shipping-progress-box">
           <div className="shipping-progress-text">
             {isFreeShipping ? (
@@ -95,7 +132,7 @@ export default function CartDrawer() {
               </span>
             ) : (
               <span>
-                Add <strong>${(FESTIVAL_PROMO.freeShippingThreshold - subtotal).toFixed(2)}</strong> more for FREE Shipping!
+                Add <strong>₹{Math.max(0, FESTIVAL_PROMO.freeShippingThreshold - subtotal).toLocaleString("en-IN")}</strong> more for FREE Shipping!
               </span>
             )}
           </div>
@@ -125,9 +162,15 @@ export default function CartDrawer() {
             <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "1.45rem", marginBottom: "0.5rem" }}>
               Order Confirmed!
             </h3>
+            {confirmedOrderNumber && (
+              <div style={{ margin: "0.75rem auto 1.25rem", padding: "0.5rem 1.25rem", borderRadius: "8px", backgroundColor: "var(--color-cream-subtle)", border: "1px solid var(--color-border)", display: "inline-block" }}>
+                <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Order Reference</span>
+                <span style={{ fontWeight: 800, fontSize: "1.1rem", color: "var(--color-dragon-black)", fontFamily: "monospace" }}>#{confirmedOrderNumber}</span>
+              </div>
+            )}
             <p style={{ color: "var(--color-text-secondary)", fontSize: "0.9rem", lineHeight: 1.6, marginBottom: "2rem" }}>
               Thank you for supporting artisanal craftsmanship. Your cold-process soap bars are being lovingly hand-wrapped 
-              in plastic-free terracotta packaging.
+              in plastic-free terracotta packaging and scheduled for dispatch to <strong>{selectedState}</strong>.
             </p>
             <button
               type="button"
@@ -212,7 +255,7 @@ export default function CartDrawer() {
 
                     <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
                       <span className="cart-item-price">
-                        ${(soap.price * quantity).toFixed(2)}
+                        ₹{(soap.price * quantity).toLocaleString("en-IN")}
                       </span>
                       <button
                         type="button"
@@ -284,27 +327,89 @@ export default function CartDrawer() {
               </div>
             )}
 
-            {/* Calculations */}
+            {/* Delivery State Selector for State-Wise Shipping */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "0.85rem",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
+                backgroundColor: "var(--color-cream-subtle)",
+                border: "1px solid var(--color-border)",
+                fontSize: "0.82rem",
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: "5px", fontWeight: 600, color: "var(--color-dragon-black)" }}>
+                <MapPin size={14} color="var(--color-terracotta)" /> Ship To:
+              </span>
+              <select
+                value={selectedState}
+                onChange={(e) => setSelectedState(e.target.value)}
+                style={{
+                  border: "none",
+                  backgroundColor: "#ffffff",
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  color: "var(--color-terracotta)",
+                  outline: "none",
+                  cursor: "pointer",
+                  borderLeft: "2px solid var(--color-terracotta)",
+                }}
+              >
+                {INDIAN_STATES.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Calculations in Indian Rupees */}
             <div className="cart-summary-line">
               <span>Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>₹{subtotal.toLocaleString("en-IN")}</span>
             </div>
 
             {discountAmount > 0 && (
               <div className="cart-summary-line" style={{ color: "var(--color-terracotta)", fontWeight: 600 }}>
                 <span>Festival Discount (25%)</span>
-                <span>-${discountAmount.toFixed(2)}</span>
+                <span>-₹{Math.round(discountAmount).toLocaleString("en-IN")}</span>
+              </div>
+            )}
+
+            {/* Tax Row: Inclusive vs Exclusive */}
+            {hasExclusiveTax ? (
+              <div className="cart-summary-line" style={{ color: "var(--color-dragon-black)", fontWeight: 600 }}>
+                <span>Estimated GST / Tax (Excl.)</span>
+                <span>+₹{Math.round(taxAmount).toLocaleString("en-IN")}</span>
+              </div>
+            ) : (
+              <div className="cart-summary-line" style={{ fontSize: "0.78rem", color: "var(--color-text-tertiary)" }}>
+                <span>Taxes &amp; GST</span>
+                <span style={{ color: "#2e7d32", fontWeight: 600 }}>Included in price</span>
               </div>
             )}
 
             <div className="cart-summary-line">
-              <span>Botanical Shipping</span>
-              <span>{shippingCost === 0 ? "FREE" : `$${shippingCost.toFixed(2)}`}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                Shipping to {selectedState}
+              </span>
+              <span>
+                {shippingCost === 0 ? (
+                  <strong style={{ color: "#2e7d32" }}>FREE</strong>
+                ) : (
+                  `₹${shippingCost.toLocaleString("en-IN")}`
+                )}
+              </span>
             </div>
 
             <div className="cart-summary-total">
               <span>Total</span>
-              <span>${grandTotal.toFixed(2)}</span>
+              <span>₹{Math.round(grandTotal).toLocaleString("en-IN")}</span>
             </div>
 
             <button
@@ -313,7 +418,7 @@ export default function CartDrawer() {
               onClick={handleCheckout}
               disabled={isCheckingOut}
             >
-              {isCheckingOut ? "Preparing Your Botanical Order..." : `Proceed to Checkout • $${grandTotal.toFixed(2)}`}
+              {isCheckingOut ? "Preparing Your Botanical Order..." : `Proceed to Checkout • ₹${Math.round(grandTotal).toLocaleString("en-IN")}`}
             </button>
 
             <div

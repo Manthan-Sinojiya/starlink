@@ -7,7 +7,7 @@ import { ShieldCheck, Truck, Sparkles, Heart } from "lucide-react";
 
 export default function Footer() {
   return (
-    <footer className="site-footer" role="contentinfo">
+    <footer id="contact" className="site-footer" role="contentinfo">
       <div className="container">
         <div className="footer-top-grid">
           {/* Brand Bio */}
@@ -111,7 +111,9 @@ export default function Footer() {
                 <Link href="#festival-offers">Holiday Gift Sets &amp; Hampers</Link>
               </li>
               <li>
-                <span>Track Your Botanical Order</span>
+                <Link href="/admin" style={{ color: "var(--color-terracotta)", fontWeight: 600 }}>
+                  ⚙️ Admin Atelier Studio
+                </Link>
               </li>
             </ul>
           </div>

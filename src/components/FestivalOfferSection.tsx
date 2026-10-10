@@ -1,66 +1,35 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Sparkles, Copy, Check, Gift, Truck, ShieldCheck, ShoppingBag, Star, ArrowRight, Eye, RefreshCw } from "lucide-react";
-import { SOAPS, FESTIVAL_PROMO } from "@/data/soaps";
+import { Sparkles, Copy, Check, Gift, Truck, ShieldCheck, ShoppingBag, Star, ArrowRight, Eye, RefreshCw, MessageCircle } from "lucide-react";
+import { SOAPS, FESTIVAL_PROMO, Soap } from "@/data/soaps";
 import { useCart } from "@/context/CartContext";
+import { useStore } from "@/context/StoreContext";
+import { openWhatsAppDirect } from "@/utils/whatsapp";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 export default function FestivalOfferSection() {
   const { addToCart, showToast } = useCart();
+  const { primaryOffer } = useStore();
   const [copied, setCopied] = useState(false);
   const [added, setAdded] = useState(false);
-  // viewMode: 'box' or index 0..3 for specific soap bar
   const [selectedView, setSelectedView] = useState<"box" | number>("box");
 
-  const festiveSoap = SOAPS.find((s) => s.id === "festive-dragons-glow-gift-set") || SOAPS[0];
+  if (!primaryOffer || !primaryOffer.isActive) return null;
 
-  const includedBars = [
-    {
-      id: "cinnamon-embers",
-      name: "Cinnamon Embers",
-      aroma: "Star Anise, Ceylon Cinnamon & Dried Clove",
-      benefit: "Warming circulation stimulation for dry winter skin",
-      lather: "Dense Velvet Warm Foam",
-      botanical: "Cinnamon Bark & Star Anise Resin",
-      weight: "120g Bar",
-      image: "/images/products/terracotta-orange.jpg",
-    },
-    {
-      id: "dragons-blood",
-      name: "Dragon's Blood & Myrrh",
-      aroma: "Wild Daemonorops Resin & Somalian Myrrh",
-      benefit: "Profound cellular renewal & firming micro-lather",
-      lather: "Silky Cashmere Micro-lather",
-      botanical: "Sacred Dragon's Blood & Organic Shea",
-      weight: "120g Bar",
-      image: "/images/products/dragons-blood.jpg",
-    },
-    {
-      id: "forest-gold",
-      name: "Forest Spice & 24k Gold",
-      aroma: "Balsam Fir, Pine Needle & 24k Gold Leaf",
-      benefit: "Pure radiance infused with real cosmetic gold flakes",
-      lather: "Golden Froth with Shimmer",
-      botanical: "24K Cosmetic Gold & Balsam Fir Needle",
-      weight: "120g Bar",
-      image: "/images/products/saffron-honey.jpg",
-    },
-    {
-      id: "wild-berry",
-      name: "Wild Berry & Cedarwood",
-      aroma: "Himalayan Cedar & Sweet Winterberry",
-      benefit: "Deep calming relaxation for evening bath rituals",
-      lather: "Ultra-Hydrating Cream Lather",
-      botanical: "Himalayan Cedarwood & Wild Winterberry",
-      weight: "120g Bar",
-      image: "/images/products/oud-sandalwood.jpg",
-    },
-  ];
-
-  // Active bar details (default to bar 0 if box is selected)
-  const activeBar = typeof selectedView === "number" ? includedBars[selectedView] : includedBars[0];
+  const includedBars = primaryOffer.bars || [];
+  const activeBar = typeof selectedView === "number" && includedBars[selectedView]
+    ? includedBars[selectedView]
+    : (includedBars[0] || {
+        name: "Artisanal Bar",
+        lather: "Velvet foam",
+        aroma: "Botanical oils",
+        benefit: "Nourishes skin",
+        botanical: "Pure extracts",
+        image: primaryOffer.mainImage,
+      });
 
   // Live countdown timer state
   const [timeLeft, setTimeLeft] = useState({
@@ -89,22 +58,50 @@ export default function FestivalOfferSection() {
   }, []);
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(FESTIVAL_PROMO.code);
+    const code = primaryOffer.promoCode || FESTIVAL_PROMO.code;
+    navigator.clipboard.writeText(code);
     setCopied(true);
-    showToast(`Promo code "${FESTIVAL_PROMO.code}" copied! 25% Off storewide ✨`);
+    showToast(`Promo code "${code}" copied! ${primaryOffer.discountPercent}% Off storewide ✨`);
     setTimeout(() => setCopied(false), 2400);
   };
+
+  const festiveSoap: Soap = useMemo(() => ({
+    id: primaryOffer.id,
+    name: primaryOffer.title,
+    tagline: primaryOffer.subtitle,
+    mainCategory: "Festive & Luxury Gift Sets",
+    subCategory: "Collector Box Set",
+    category: "festive",
+    price: primaryOffer.salePrice,
+    originalPrice: primaryOffer.originalPrice,
+    rating: 5.0,
+    reviewsCount: 94,
+    weight: "4-Bar Keepsake Set",
+    taxType: "inclusive",
+    taxRate: 18,
+    cureTime: "Limited Holiday Batch",
+    fragranceNotes: ["Botanical resins", "Gold flakes"],
+    keyIngredients: ["24k Cosmetic Gold", "Botanical Resins"],
+    fullIngredients: ["Saponified Olive Oil, Shea Butter, Plant Oils, 24k Cosmetic Gold Leaf"],
+    skinType: "All Skin Types • Luxury Gifting",
+    soapBenefits: ["Four distinct holiday sensory rituals in one keepsake box"],
+    ritualHowToUse: "Unbox each numbered bar as part of your holiday bathing ritual.",
+    description: primaryOffer.description,
+    image: primaryOffer.mainImage,
+    inStock: true,
+    isFestive: true,
+  }), [primaryOffer]);
 
   const handleAddCollectorBox = () => {
     addToCart(festiveSoap, 1);
     setAdded(true);
-    showToast("Dragon's Glow Collector Box added to your bag! 🎁");
+    showToast(`"${primaryOffer.title}" added to your bag! 🎁`);
     setTimeout(() => setAdded(false), 1800);
   };
 
   // Current display image
-  const displayImage = selectedView === "box" ? festiveSoap.image : includedBars[selectedView].image;
-  const displayTitle = selectedView === "box" ? "The Complete 4-Piece Keepsake Box" : includedBars[selectedView].name;
+  const displayImage = selectedView === "box" ? primaryOffer.mainImage : includedBars[selectedView].image;
+  const displayTitle = selectedView === "box" ? primaryOffer.title : includedBars[selectedView].name;
 
   return (
     <section id="festival-offers" className="festival-collector-showcase" aria-label="Limited Holiday Collector Box">
@@ -113,13 +110,10 @@ export default function FestivalOfferSection() {
         <div className="section-header" style={{ marginBottom: "2rem" }}>
           <span className="section-tag festive-tag">
             <Gift size={13} style={{ display: "inline", verticalAlign: "middle", marginRight: "5px" }} />
-            2026 Limited Holiday Collector Vault
+            {primaryOffer.sectionTag}
           </span>
-          <h2 className="section-title">The Grand Festival Gift Collection</h2>
-          <p className="section-subtitle">
-            An opulent holiday centerpiece. Four full-sized 120g artisanal cold-process bars infused with 24k cosmetic gold leaf,
-            presented in a rigid dragon-embossed keepsake box with copper satin ribbon and complimentary teak dish.
-          </p>
+          <h2 className="section-title">{primaryOffer.title}</h2>
+          <p className="section-subtitle">{primaryOffer.subtitle}</p>
         </div>
 
         {/* The Collector Box Feature Card */}
@@ -131,10 +125,10 @@ export default function FestivalOfferSection() {
               {/* Badges on Visual */}
               <div className="collector-frame-badges">
                 <span className="collector-edition-pill">
-                  <Sparkles size={12} /> Only 450 Numbered Boxes Made
+                  <Sparkles size={12} /> {primaryOffer.badgeText}
                 </span>
                 <span className="collector-discount-pill">
-                  SAVE $20.00 • 25% OFF
+                  {primaryOffer.discountText}
                 </span>
               </div>
 
@@ -255,17 +249,17 @@ export default function FestivalOfferSection() {
               dragon keepsake box with a free hand-carved teak soap dish.
             </p>
 
-            {/* Pricing Callout & Savings Breakdown */}
+            {/* Pricing Callout & Savings Breakdown in Indian Rupees */}
             <div className="collector-price-banner">
               <div className="price-stack">
-                <span className="collector-price-now">${festiveSoap.price.toFixed(2)}</span>
-                <span className="collector-price-was">$78.00</span>
+                <span className="collector-price-now">₹{primaryOffer.salePrice.toLocaleString("en-IN")}</span>
+                <span className="collector-price-was">₹{primaryOffer.originalPrice.toLocaleString("en-IN")}</span>
               </div>
-              <span className="collector-savings-badge">SAVE $20.00 (25% OFF)</span>
+              <span className="collector-savings-badge">{primaryOffer.discountText}</span>
             </div>
 
             <div className="collector-value-breakdown">
-              <span>Worth $88 if bought individually • Only <strong>$14.50</strong> per 120g bar + Free Teak Dish ($18 value)</span>
+              <span>Worth ₹{primaryOffer.originalPrice.toLocaleString("en-IN")} if bought individually • Only <strong>₹{Math.round(primaryOffer.salePrice / (includedBars.length || 1))}</strong> per bar</span>
             </div>
 
             {/* Vault Countdown Timer */}
@@ -301,8 +295,8 @@ export default function FestivalOfferSection() {
             <div className="collector-promo-card">
               <div className="promo-info">
                 <span className="promo-badge">HOLIDAY SAVINGS CODE</span>
-                <div className="promo-headline">VOUCHER CODE: <strong>{FESTIVAL_PROMO.code}</strong></div>
-                <div className="promo-sub">Use at checkout for an instant 25% storewide discount</div>
+                <div className="promo-headline">VOUCHER CODE: <strong>{primaryOffer.promoCode}</strong></div>
+                <div className="promo-sub">Use at checkout for an instant {primaryOffer.discountPercent}% storewide discount</div>
               </div>
               <button
                 type="button"
@@ -336,7 +330,7 @@ export default function FestivalOfferSection() {
                 </li>
                 <li>
                   <Check size={16} className="check-icon" />
-                  <span><strong>Free Teak Dish Included:</strong> Hand-carved organic draining tray ($18 value)</span>
+                  <span><strong>Free Teak Dish Included:</strong> Hand-carved organic draining tray (₹499 value)</span>
                 </li>
                 <li>
                   <Check size={16} className="check-icon" />
@@ -345,13 +339,14 @@ export default function FestivalOfferSection() {
               </ul>
             </div>
 
-            {/* Action CTA Row */}
-            <div className="collector-cta-row">
+            {/* Action CTA Row with WhatsApp Enquire */}
+            <div className="collector-cta-row" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
               <button
                 type="button"
                 className={`collector-add-btn ${added ? "added-state" : ""}`}
                 onClick={handleAddCollectorBox}
                 aria-label="Add Holiday Collector Box to Bag"
+                style={{ flex: "1 1 220px" }}
               >
                 {added ? (
                   <>
@@ -359,9 +354,19 @@ export default function FestivalOfferSection() {
                   </>
                 ) : (
                   <>
-                    <ShoppingBag size={18} /> Claim Collector Box • ${festiveSoap.price.toFixed(2)}
+                    <ShoppingBag size={18} /> Claim Collector Box • ₹{festiveSoap.price.toLocaleString("en-IN")}
                   </>
                 )}
+              </button>
+
+              <button
+                type="button"
+                className="offer-whatsapp-icon-btn"
+                onClick={() => openWhatsAppDirect(festiveSoap)}
+                title="Enquire on WhatsApp"
+                aria-label={`Enquire about ${festiveSoap.name} on WhatsApp`}
+              >
+                <WhatsAppIcon size={22} />
               </button>
 
               <Link

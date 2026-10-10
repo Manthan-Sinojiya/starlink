@@ -3,16 +3,18 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Star, Heart, ShoppingBag, Check, Eye, Sparkles } from "lucide-react";
+import { ShoppingBag, Check, Eye, Sparkles, MessageCircle } from "lucide-react";
 import { Soap } from "@/data/soaps";
 import { useCart } from "@/context/CartContext";
+import { openWhatsAppDirect } from "@/utils/whatsapp";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 interface ProductCardProps {
   soap: Soap;
 }
 
 export default function ProductCard({ soap }: ProductCardProps) {
-  const { addToCart, isInWishlist, toggleWishlist, setQuickViewSoap, showToast } = useCart();
+  const { addToCart, setQuickViewSoap, showToast } = useCart();
   const [isAddedRecently, setIsAddedRecently] = useState(false);
 
   const handleAddToCart = (e: React.MouseEvent) => {
@@ -24,12 +26,21 @@ export default function ProductCard({ soap }: ProductCardProps) {
     setTimeout(() => setIsAddedRecently(false), 1600);
   };
 
-  const isFavorite = isInWishlist(soap.id);
+  const handleWhatsAppEnquire = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openWhatsAppDirect(soap);
+  };
 
   const discountPercent =
     soap.originalPrice && soap.originalPrice > soap.price
       ? Math.round(((soap.originalPrice - soap.price) / soap.originalPrice) * 100)
       : null;
+
+  // Truncate description strictly to 40 characters as requested
+  const truncatedDescription = soap.description
+    ? soap.description.slice(0, 40) + (soap.description.length > 40 ? "..." : "")
+    : "";
 
   return (
     <article className="luxury-product-card" id={`product-${soap.id}`}>
@@ -54,20 +65,6 @@ export default function ProductCard({ soap }: ProductCardProps) {
           </span>
         )}
 
-        {/* Wishlist Heart Button */}
-        <button
-          type="button"
-          className={`card-heart-btn ${isFavorite ? "favorited" : ""}`}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleWishlist(soap.id);
-          }}
-          aria-label={isFavorite ? `Remove ${soap.name} from wishlist` : `Add ${soap.name} to wishlist`}
-        >
-          <Heart size={16} fill={isFavorite ? "#e02424" : "none"} color={isFavorite ? "#e02424" : "currentColor"} />
-        </button>
-
         {/* Quick View Button (Frosted Luxury Glass Pill) */}
         <button
           type="button"
@@ -83,73 +80,73 @@ export default function ProductCard({ soap }: ProductCardProps) {
         </button>
       </div>
 
-      {/* 2. Card Content Info Block */}
+      {/* 2. Card Content Info Block - Updated with Product Name & 40-char description */}
       <div className="card-info-wrap">
-        {/* Eyebrow: Cold-Process, Weight & Cure */}
-        <div className="card-meta-eyebrow">
-          <span>Cold-Process</span>
-          <span className="dot-sep">•</span>
-          <span>{soap.weight}</span>
-          <span className="dot-sep">•</span>
-          <span>{soap.cureTime}</span>
-        </div>
-
-        {/* Title (2-line clamped with uniform height) */}
+        {/* Product Name */}
         <Link href={`/products/${soap.id}`} className="card-title-anchor">
-          <h3 className="card-soap-title">{soap.name}</h3>
+          <h3 className="card-soap-title" title={soap.name}>
+            {soap.name}
+          </h3>
         </Link>
 
-        {/* Aroma / Scent Notes */}
-        <p className="card-aroma-notes" title={soap.fragranceNotes.join(", ")}>
-          <span className="aroma-label">Aroma:</span> {soap.fragranceNotes.slice(0, 3).join(" • ")}
+        {/* Description limited to 40 characters */}
+        <p className="card-short-desc" title={soap.description}>
+          {truncatedDescription}
         </p>
 
-        {/* 5-Star Rating Row */}
-        <div className="card-stars-row">
-          <div className="stars-group" aria-label={`Rating ${soap.rating} out of 5`}>
-            {[...Array(5)].map((_, i) => (
-              <Star
-                key={i}
-                size={12}
-                fill={i < Math.floor(soap.rating) ? "#c9933b" : "none"}
-                stroke="#c9933b"
-              />
-            ))}
-          </div>
-          <span className="card-rating-text">{soap.rating.toFixed(1)}</span>
-          <span className="card-reviews-count">({soap.reviewsCount})</span>
-        </div>
-
-        {/* Pricing Row */}
+        {/* Pricing Row in Indian Rupees with Tax Status */}
         <div className="card-price-row">
           <div className="price-tag-group">
-            <span className="current-price">${soap.price.toFixed(2)}</span>
+            <span className="current-price">₹{soap.price.toLocaleString("en-IN")}</span>
             {soap.originalPrice && (
-              <span className="original-price">${soap.originalPrice.toFixed(2)}</span>
+              <span className="original-price">₹{soap.originalPrice.toLocaleString("en-IN")}</span>
             )}
           </div>
-          {discountPercent && (
-            <span className="discount-tag">-{discountPercent}% OFF</span>
-          )}
+          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            {soap.taxType === "exclusive" ? (
+              <span style={{ fontSize: "0.68rem", color: "var(--color-terracotta)", fontWeight: 700, background: "rgba(225, 113, 89, 0.1)", padding: "2px 6px", borderRadius: "9999px" }}>
+                +{soap.taxRate || 18}% GST
+              </span>
+            ) : (
+              <span style={{ fontSize: "0.68rem", color: "#2e7d32", fontWeight: 700, background: "rgba(46, 125, 50, 0.08)", padding: "2px 6px", borderRadius: "9999px" }}>
+                Incl. Tax
+              </span>
+            )}
+            {discountPercent && (
+              <span className="discount-tag">-{discountPercent}%</span>
+            )}
+          </div>
         </div>
 
-        {/* Full-width Sleek Add to Bag Button */}
-        <button
-          type="button"
-          className={`card-add-bag-btn ${isAddedRecently ? "added" : ""}`}
-          onClick={handleAddToCart}
-          aria-label={`Add ${soap.name} to cart`}
-        >
-          {isAddedRecently ? (
-            <>
-              <Check size={15} /> Added to Bag
-            </>
-          ) : (
-            <>
-              <ShoppingBag size={15} /> Add to Bag
-            </>
-          )}
-        </button>
+        {/* Action Buttons: Add to Bag + WhatsApp Enquire */}
+        <div className="card-actions-group">
+          <button
+            type="button"
+            className={`card-add-bag-btn ${isAddedRecently ? "added" : ""}`}
+            onClick={handleAddToCart}
+            aria-label={`Add ${soap.name} to cart`}
+          >
+            {isAddedRecently ? (
+              <>
+                <Check size={15} /> Added to Bag
+              </>
+            ) : (
+              <>
+                <ShoppingBag size={15} /> Add to Bag
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            className="card-whatsapp-btn"
+            onClick={handleWhatsAppEnquire}
+            aria-label={`Enquire about ${soap.name} on WhatsApp`}
+            title="Enquire on WhatsApp"
+          >
+            <WhatsAppIcon size={19} />
+          </button>
+        </div>
       </div>
     </article>
   );

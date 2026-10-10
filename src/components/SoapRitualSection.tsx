@@ -28,7 +28,7 @@ export default function SoapRitualSection() {
   ];
 
   return (
-    <section id="ritual" className="ritual-section" aria-label="Our Soap Ritual">
+    <section id="about" className="ritual-section" aria-label="About Us & Artisanal Soap Saponification">
       <div className="container">
         <div className="section-header">
           <span className="section-tag">The Star Light Standard</span>

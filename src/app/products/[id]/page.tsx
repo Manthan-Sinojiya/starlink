@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { SOAPS } from "@/data/soaps";
 import ProductDetailView from "@/components/ProductDetailView";
@@ -19,13 +20,21 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!soap) {
     return {
-      title: "Soap Not Found | Star Light Co.",
+      title: "Artisanal Soap | Star Light Co.",
+      description: "Handcrafted cold-process botanical soaps curing 4-6 weeks in small batches.",
     };
   }
 
+  const title = soap.metaTitle || `${soap.name} | Star Light Co. Artisanal Soaps`;
+  const description = soap.metaDescription || soap.description;
+  const keywords = soap.metaKeywords
+    ? soap.metaKeywords.split(",").map((k) => k.trim())
+    : [soap.name, soap.mainCategory, soap.subCategory, "artisanal soap", "cold process soap", "botanical skincare"];
+
   return {
-    title: `${soap.name} | Star Light Co. Artisanal Soaps`,
-    description: soap.description,
+    title,
+    description,
+    keywords,
     openGraph: {
       title: `${soap.name} — Star Light Co.`,
       description: soap.tagline,
@@ -41,13 +50,34 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function ProductPage({ params }: PageProps) {
+async function ProductDetailsContent({ params }: PageProps) {
   const { id } = await params;
   const soap = SOAPS.find((s) => s.id === id);
 
-  if (!soap) {
-    notFound();
-  }
-
-  return <ProductDetailView soap={soap} />;
+  return <ProductDetailView id={id} initialSoap={soap || null} />;
 }
+
+export default function ProductPage({ params }: PageProps) {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            minHeight: "60vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontFamily: "var(--font-serif)",
+            fontSize: "1.1rem",
+            color: "var(--color-text-secondary)",
+          }}
+        >
+          Loading artisanal formulation...
+        </div>
+      }
+    >
+      <ProductDetailsContent params={params} />
+    </Suspense>
+  );
+}
+

@@ -1,8 +1,9 @@
 export interface Soap {
   id: string;
+  slug?: string;
   name: string;
   tagline: string;
-  mainCategory: "Face & Gentle Cleansing" | "Body & Deep Hydration" | "Aromatherapy & Calming" | "Festive & Luxury Gift Sets";
+  mainCategory: string;
   subCategory: string;
   category: "all" | "detox" | "hydration" | "calming" | "glow" | "festive";
   price: number;
@@ -10,10 +11,14 @@ export interface Soap {
   rating: number;
   reviewsCount: number;
   weight: string;
+  weightValue?: number;
+  weightUnit?: "g" | "kg";
+  taxType?: "inclusive" | "exclusive"; // Tax including vs excluding
+  taxRate?: number; // percentage (e.g. 5, 12, 18)
   cureTime: string;
   badge?: string;
   fragranceNotes: string[];
-  scentPyramid: {
+  scentPyramid?: {
     top: string[];
     heart: string[];
     base: string[];
@@ -28,39 +33,157 @@ export interface Soap {
   inStock: boolean;
   isBestseller?: boolean;
   isFestive?: boolean;
+  // SEO Metadata
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string;
 }
 
 export interface CategoryStructure {
   id: string;
   name: string;
+  slug?: string;
+  description?: string;
+  image?: string;
+  badge?: string;
   subcategories: string[];
+  order?: number;
+  // SEO Metadata
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string;
+}
+
+export interface ShippingSettings {
+  shippingType: "flat" | "free_threshold" | "state_wise";
+  flatRate: number;
+  freeShippingThreshold: number;
+  enableFreeThreshold: boolean;
+  defaultStateRate: number;
+  stateRates: Record<string, number>;
+}
+
+export interface OfferBarItem {
+  id: string;
+  name: string;
+  aroma: string;
+  benefit: string;
+  lather: string;
+  botanical: string;
+  weight: string;
+  image: string;
+}
+
+export interface OfferSectionConfig {
+  id: string;
+  isActive: boolean;
+  sectionTag: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  badgeText: string;
+  discountText: string;
+  promoCode: string;
+  discountPercent: number;
+  originalPrice: number;
+  salePrice: number;
+  countdownDate: string;
+  mainImage: string;
+  bars: OfferBarItem[];
+}
+
+export interface UserAccount {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  password?: string;
+  role: "customer" | "admin";
+  address?: string;
+  state?: string;
+  pincode?: string;
+  createdAt: string;
+  totalOrders?: number;
+  totalSpent?: number;
+}
+
+export interface OrderItem {
+  productId: string;
+  name: string;
+  image: string;
+  price: number;
+  weight: string;
+  quantity: number;
+}
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  shippingAddress: string;
+  shippingState: string;
+  shippingPincode: string;
+  items: OrderItem[];
+  subtotal: number;
+  taxAmount: number;
+  shippingCost: number;
+  discountAmount: number;
+  total: number;
+  status: "Pending" | "Processing" | "Shipped" | "Delivered" | "Cancelled";
+  paymentMethod: "UPI" | "Card" | "NetBanking" | "Cash on Delivery";
+  createdAt: string;
 }
 
 export const CATEGORIES_DATA: CategoryStructure[] = [
   {
-    id: "all",
-    name: "All Artisanal Soaps",
-    subcategories: ["All Formulas", "Best Sellers", "Award Winners"],
-  },
-  {
     id: "Face & Gentle Cleansing",
     name: "Face & Gentle Cleansing",
+    slug: "face-gentle-cleansing",
+    description: "Ultra-pure botanical clay & delicate facial bars for balanced, radiant pores",
+    image: "/images/products/charcoal-clay.jpg",
+    badge: "Facial Atelier",
     subcategories: ["Pore Detox Clay", "Velvet Rose Calming", "Clarifying Mint"],
+    order: 0,
+    metaTitle: "Artisanal Face Soaps & Gentle Cleansing Bars | Star Light Co.",
+    metaDescription: "Explore hand-poured facial bars with activated bamboo charcoal, white kaolin, and damask rose.",
   },
   {
     id: "Body & Deep Hydration",
     name: "Body & Deep Hydration",
+    slug: "body-deep-hydration",
+    description: "Sacred resin infusions & farm milk nourishment for deep dermal renewal",
+    image: "/images/products/dragons-blood.jpg",
+    badge: "Signature Body",
     subcategories: ["Dragon's Blood Firming", "Imperial Saffron Milk", "Terracotta Citrus Glow"],
+    order: 1,
+    metaTitle: "Luxury Body Soaps & Deep Hydration Bars | Star Light Co.",
+    metaDescription: "Cold-cured 8 weeks with wild dragon's blood resin, shea butter, and Kashmiri saffron.",
   },
   {
     id: "Aromatherapy & Calming",
     name: "Aromatherapy & Calming",
+    slug: "aromatherapy-calming",
+    description: "High-altitude French lavender & sacred smoky oud for restorative evening rituals",
+    image: "/images/products/lavender-silk.jpg",
+    badge: "Evening Rituals",
     subcategories: ["Provence Lavender Silk", "Sacred Agarwood Oud"],
+    order: 2,
+    metaTitle: "Aromatherapy & Calming Bath Bars | Star Light Co.",
+    metaDescription: "Unwind with pure steam-distilled French lavender, Mysore sandalwood, and agarwood oud.",
   },
   {
     id: "Festive & Luxury Gift Sets",
     name: "Festive & Luxury Gift Sets",
+    slug: "festive-gift-sets",
+    description: "Handcrafted collector boxes with 24k cosmetic gold and artisan draining dishes",
+    image: "/images/products/festive-box.jpg",
+    badge: "Limited Release",
     subcategories: ["Dragon's Glow 4-Piece Box", "Limited Edition 24k Gold Drops"],
+    order: 3,
+    metaTitle: "Festive & Luxury Soap Gift Sets | Star Light Co.",
+    metaDescription: "Artisanal collector sets presented in numbered keepsake boxes with gold wax seals.",
   },
 ];
 
@@ -72,8 +195,8 @@ export const SOAPS: Soap[] = [
     mainCategory: "Body & Deep Hydration",
     subCategory: "Dragon's Blood Firming",
     category: "glow",
-    price: 18.0,
-    originalPrice: 22.0,
+    price: 499,
+    originalPrice: 599,
     rating: 4.9,
     reviewsCount: 148,
     weight: "125g / 4.4 oz",
@@ -123,7 +246,8 @@ export const SOAPS: Soap[] = [
     mainCategory: "Face & Gentle Cleansing",
     subCategory: "Pore Detox Clay",
     category: "detox",
-    price: 16.0,
+    price: 449,
+    originalPrice: 499,
     rating: 4.8,
     reviewsCount: 112,
     weight: "120g / 4.2 oz",
@@ -173,8 +297,8 @@ export const SOAPS: Soap[] = [
     mainCategory: "Body & Deep Hydration",
     subCategory: "Terracotta Citrus Glow",
     category: "glow",
-    price: 17.0,
-    originalPrice: 20.0,
+    price: 449,
+    originalPrice: 549,
     rating: 5.0,
     reviewsCount: 136,
     weight: "125g / 4.4 oz",
@@ -224,8 +348,8 @@ export const SOAPS: Soap[] = [
     mainCategory: "Body & Deep Hydration",
     subCategory: "Imperial Saffron Milk",
     category: "hydration",
-    price: 22.0,
-    originalPrice: 26.0,
+    price: 699,
+    originalPrice: 799,
     rating: 4.9,
     reviewsCount: 174,
     weight: "130g / 4.6 oz",
@@ -275,7 +399,8 @@ export const SOAPS: Soap[] = [
     mainCategory: "Face & Gentle Cleansing",
     subCategory: "Velvet Rose Calming",
     category: "calming",
-    price: 17.0,
+    price: 479,
+    originalPrice: 549,
     rating: 4.8,
     reviewsCount: 98,
     weight: "120g / 4.2 oz",
@@ -324,7 +449,8 @@ export const SOAPS: Soap[] = [
     mainCategory: "Aromatherapy & Calming",
     subCategory: "Sacred Agarwood Oud",
     category: "hydration",
-    price: 24.0,
+    price: 649,
+    originalPrice: 749,
     rating: 4.9,
     reviewsCount: 89,
     weight: "125g / 4.4 oz",
@@ -373,7 +499,8 @@ export const SOAPS: Soap[] = [
     mainCategory: "Aromatherapy & Calming",
     subCategory: "Provence Lavender Silk",
     category: "calming",
-    price: 16.0,
+    price: 449,
+    originalPrice: 499,
     rating: 4.9,
     reviewsCount: 122,
     weight: "120g / 4.2 oz",
@@ -422,7 +549,8 @@ export const SOAPS: Soap[] = [
     mainCategory: "Face & Gentle Cleansing",
     subCategory: "Clarifying Mint",
     category: "detox",
-    price: 16.0,
+    price: 449,
+    originalPrice: 499,
     rating: 4.8,
     reviewsCount: 84,
     weight: "120g / 4.2 oz",
@@ -471,8 +599,8 @@ export const SOAPS: Soap[] = [
     mainCategory: "Festive & Luxury Gift Sets",
     subCategory: "Dragon's Glow 4-Piece Box",
     category: "festive",
-    price: 58.0,
-    originalPrice: 78.0,
+    price: 1899,
+    originalPrice: 2499,
     rating: 5.0,
     reviewsCount: 218,
     weight: "4 x 120g / 17 oz Total",
@@ -518,6 +646,339 @@ export const FESTIVAL_PROMO = {
   code: "FESTIVE25",
   discountPercent: 25,
   title: "Grand Festive Celebration Sale",
-  subtitle: "Enjoy 25% Off Storewide + Free Dragon Keepsake Gift Box on Orders Over $50",
-  freeShippingThreshold: 50,
+  subtitle: "Enjoy 25% Off Storewide + Free Dragon Keepsake Gift Box on Orders Over ₹1,499",
+  freeShippingThreshold: 999,
 };
+
+export const formatPrice = (price: number): string =>
+  "₹" + Math.round(price).toLocaleString("en-IN");
+
+export const INDIAN_STATES: string[] = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jammu & Kashmir",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Delhi NCR",
+  "Chandigarh",
+  "Puducherry",
+];
+
+export const DEFAULT_SHIPPING_SETTINGS: ShippingSettings = {
+  shippingType: "state_wise",
+  flatRate: 99,
+  freeShippingThreshold: 999,
+  enableFreeThreshold: true,
+  defaultStateRate: 99,
+  stateRates: {
+    Maharashtra: 49,
+    Gujarat: 49,
+    Goa: 59,
+    "Delhi NCR": 69,
+    Karnataka: 69,
+    Haryana: 69,
+    Telangana: 69,
+    "Tamil Nadu": 79,
+    Kerala: 79,
+    "Uttar Pradesh": 79,
+    Rajasthan: 79,
+    Punjab: 79,
+    "Madhya Pradesh": 79,
+    "Andhra Pradesh": 79,
+    "West Bengal": 89,
+    Bihar: 89,
+    Odisha: 89,
+    Chhattisgarh: 89,
+    Uttarakhand: 89,
+    "Himachal Pradesh": 99,
+    Assam: 119,
+    "Jammu & Kashmir": 129,
+    Sikkim: 129,
+    "Other States": 99,
+  },
+};
+
+export const DEFAULT_PRIMARY_OFFER: OfferSectionConfig = {
+  id: "festive-dragons-glow-gift-set",
+  isActive: true,
+  sectionTag: "2026 Limited Holiday Collector Vault",
+  title: "The Grand Festival Gift Collection",
+  subtitle: "An opulent holiday centerpiece handcrafted with 24k cosmetic gold",
+  description:
+    "An opulent holiday centerpiece. Four full-sized 120g artisanal cold-process bars infused with 24k cosmetic gold leaf, presented in a rigid dragon-embossed keepsake box with copper satin ribbon and complimentary teak dish.",
+  badgeText: "Only 450 Numbered Boxes Made",
+  discountText: "SAVE ₹600 • 25% OFF",
+  promoCode: "FESTIVE25",
+  discountPercent: 25,
+  originalPrice: 2399,
+  salePrice: 1799,
+  countdownDate: "2026-11-15T23:59:59",
+  mainImage: "/images/products/festive-box.jpg",
+  bars: [
+    {
+      id: "cinnamon-embers",
+      name: "Cinnamon Embers",
+      aroma: "Star Anise, Ceylon Cinnamon & Dried Clove",
+      benefit: "Warming circulation stimulation for dry winter skin",
+      lather: "Dense Velvet Warm Foam",
+      botanical: "Cinnamon Bark & Star Anise Resin",
+      weight: "120g Bar",
+      image: "/images/products/terracotta-orange.jpg",
+    },
+    {
+      id: "dragons-blood",
+      name: "Dragon's Blood & Myrrh",
+      aroma: "Wild Daemonorops Resin & Somalian Myrrh",
+      benefit: "Profound cellular renewal & firming micro-lather",
+      lather: "Silky Cashmere Micro-lather",
+      botanical: "Sacred Dragon's Blood & Organic Shea",
+      weight: "120g Bar",
+      image: "/images/products/dragons-blood.jpg",
+    },
+    {
+      id: "forest-gold",
+      name: "Forest Spice & 24k Gold",
+      aroma: "Balsam Fir, Pine Needle & 24k Gold Leaf",
+      benefit: "Pure radiance infused with real cosmetic gold flakes",
+      lather: "Golden Froth with Shimmer",
+      botanical: "24K Cosmetic Gold & Balsam Fir Needle",
+      weight: "120g Bar",
+      image: "/images/products/saffron-honey.jpg",
+    },
+    {
+      id: "wild-berry",
+      name: "Wild Berry & Cedarwood",
+      aroma: "Himalayan Cedar & Sweet Winterberry",
+      benefit: "Deep calming relaxation for evening bath rituals",
+      lather: "Ultra-Hydrating Cream Lather",
+      botanical: "Himalayan Cedarwood & Wild Winterberry",
+      weight: "120g Bar",
+      image: "/images/products/oud-sandalwood.jpg",
+    },
+  ],
+};
+
+export const DEFAULT_SECONDARY_OFFER: OfferSectionConfig = {
+  id: "secondary-seasonal-offer",
+  isActive: true,
+  sectionTag: "Artisanal Royal Reserve",
+  title: "Royal Ayurvedic Wellness Curation",
+  subtitle: "Handcrafted trio infused with Kashmiri saffron and wild raw forest honey",
+  description:
+    "An exclusive curation of our most revered cold-process soaps. Each bar is enriched with whole farm goat milk, cold-pressed sweet almond oil, and ancient herbal extracts for deeply nourished and luminous skin.",
+  badgeText: "Limited Seasonal Batch",
+  discountText: "SAVE ₹350 • 20% OFF",
+  promoCode: "AYUR20",
+  discountPercent: 20,
+  originalPrice: 1799,
+  salePrice: 1449,
+  countdownDate: "2026-11-30T23:59:59",
+  mainImage: "/images/products/saffron-honey.jpg",
+  bars: [
+    {
+      id: "kashmiri-saffron",
+      name: "Kashmiri Saffron & Goat Milk",
+      aroma: "Pure Mongra Saffron, Cardamom & Sweet Milk",
+      benefit: "Imparts golden radiance & softens texture",
+      lather: "Creamy Custard Lather",
+      botanical: "Grade A Kashmiri Saffron & Fresh Farm Milk",
+      weight: "125g Bar",
+      image: "/images/products/saffron-honey.jpg",
+    },
+    {
+      id: "wild-turmeric",
+      name: "Wild Turmeric & Vetiver",
+      aroma: "Kasturi Manjal, Earthy Vetiver Roots",
+      benefit: "Clarifies tone and relieves environmental fatigue",
+      lather: "Earthy Cushion Foam",
+      botanical: "Wild Forest Turmeric & Khus Vetiver",
+      weight: "125g Bar",
+      image: "/images/products/terracotta-orange.jpg",
+    },
+    {
+      id: "golden-honey",
+      name: "Raw Damask Rose & Oats",
+      aroma: "Wildflower Honeycomb & Damask Rose Petals",
+      benefit: "Ultra-gentle soothing hydration for sensitive skin",
+      lather: "Silky Velvet Micro-foam",
+      botanical: "Unfiltered Forest Honey & French Pink Clay",
+      weight: "125g Bar",
+      image: "/images/products/damask-rose.jpg",
+    },
+  ],
+};
+
+export const SEED_USERS: UserAccount[] = [
+  {
+    id: "usr-admin-1",
+    name: "Master Soapmaker",
+    email: "admin@starlight.com",
+    phone: "+91 98765 43210",
+    role: "admin",
+    address: "Atelier Studio, Colaba Causeway",
+    state: "Maharashtra",
+    pincode: "400005",
+    createdAt: "2026-08-15T10:00:00Z",
+    totalOrders: 0,
+    totalSpent: 0,
+  },
+  {
+    id: "usr-cust-1",
+    name: "Priya Sharma",
+    email: "priya.sharma@example.com",
+    phone: "+91 98201 12345",
+    role: "customer",
+    address: "Flat 402, Sea Crest Towers, Bandra West",
+    state: "Maharashtra",
+    pincode: "400050",
+    createdAt: "2026-09-02T14:22:00Z",
+    totalOrders: 3,
+    totalSpent: 4890,
+  },
+  {
+    id: "usr-cust-2",
+    name: "Rohit Verma",
+    email: "rohit.verma@example.com",
+    phone: "+91 97412 87654",
+    role: "customer",
+    address: "12, 4th Main, Indiranagar",
+    state: "Karnataka",
+    pincode: "560038",
+    createdAt: "2026-09-18T11:45:00Z",
+    totalOrders: 2,
+    totalSpent: 2650,
+  },
+  {
+    id: "usr-cust-3",
+    name: "Ananya Sen",
+    email: "ananya.sen@example.com",
+    phone: "+91 98310 99887",
+    role: "customer",
+    address: "88 Southern Avenue, Lake Market",
+    state: "West Bengal",
+    pincode: "700029",
+    createdAt: "2026-10-01T09:15:00Z",
+    totalOrders: 1,
+    totalSpent: 1799,
+  },
+];
+
+export const SEED_ORDERS: Order[] = [
+  {
+    id: "ord-1001",
+    orderNumber: "STL-2026-8941",
+    customerName: "Priya Sharma",
+    customerEmail: "priya.sharma@example.com",
+    customerPhone: "+91 98201 12345",
+    shippingAddress: "Flat 402, Sea Crest Towers, Bandra West, Mumbai",
+    shippingState: "Maharashtra",
+    shippingPincode: "400050",
+    items: [
+      {
+        productId: "festive-dragons-glow-gift-set",
+        name: "Dragon's Glow Grand Festival Keepsake Box",
+        image: "/images/products/festive-box.jpg",
+        price: 1799,
+        weight: "480g Box",
+        quantity: 1,
+      },
+      {
+        productId: "dragons-blood-amber",
+        name: "Dragon's Blood & Red Amber",
+        image: "/images/products/dragons-blood.jpg",
+        price: 649,
+        weight: "125g",
+        quantity: 1,
+      },
+    ],
+    subtotal: 2448,
+    taxAmount: 117,
+    shippingCost: 0,
+    discountAmount: 612,
+    total: 1953,
+    status: "Delivered",
+    paymentMethod: "UPI",
+    createdAt: "2026-10-04T12:30:00Z",
+  },
+  {
+    id: "ord-1002",
+    orderNumber: "STL-2026-8942",
+    customerName: "Rohit Verma",
+    customerEmail: "rohit.verma@example.com",
+    customerPhone: "+91 97412 87654",
+    shippingAddress: "12, 4th Main, Indiranagar, Bengaluru",
+    shippingState: "Karnataka",
+    shippingPincode: "560038",
+    items: [
+      {
+        productId: "charcoal-kaolin-detox",
+        name: "Activated Charcoal & White Kaolin Detox",
+        image: "/images/products/charcoal-clay.jpg",
+        price: 549,
+        weight: "125g",
+        quantity: 2,
+      },
+    ],
+    subtotal: 1098,
+    taxAmount: 0,
+    shippingCost: 69,
+    discountAmount: 0,
+    total: 1167,
+    status: "Shipped",
+    paymentMethod: "Card",
+    createdAt: "2026-10-07T16:15:00Z",
+  },
+  {
+    id: "ord-1003",
+    orderNumber: "STL-2026-8943",
+    customerName: "Ananya Sen",
+    customerEmail: "ananya.sen@example.com",
+    customerPhone: "+91 98310 99887",
+    shippingAddress: "88 Southern Avenue, Lake Market, Kolkata",
+    shippingState: "West Bengal",
+    shippingPincode: "700029",
+    items: [
+      {
+        productId: "lavender-silk-calm",
+        name: "High-Altitude French Lavender Silk",
+        image: "/images/products/lavender-silk.jpg",
+        price: 599,
+        weight: "125g",
+        quantity: 1,
+      },
+    ],
+    subtotal: 599,
+    taxAmount: 0,
+    shippingCost: 89,
+    discountAmount: 0,
+    total: 688,
+    status: "Processing",
+    paymentMethod: "UPI",
+    createdAt: "2026-10-09T08:45:00Z",
+  },
+];
+

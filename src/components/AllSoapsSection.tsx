@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { SOAPS, CATEGORIES_DATA, Soap } from "@/data/soaps";
+import { useStore } from "@/context/StoreContext";
 import ProductCard from "./ProductCard";
 import { Sparkles, SlidersHorizontal, Layers, Check } from "lucide-react";
 
@@ -10,12 +10,13 @@ interface AllSoapsSectionProps {
 }
 
 export default function AllSoapsSection({ externalSearch = "" }: AllSoapsSectionProps) {
+  const { products, categories } = useStore();
   const [selectedMainCat, setSelectedMainCat] = useState<string>("all");
   const [selectedSubCat, setSelectedSubCat] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("featured");
 
   // Get active subcategories based on the chosen main category
-  const activeCategoryData = CATEGORIES_DATA.find((c) => c.id === selectedMainCat);
+  const activeCategoryData = categories.find((c) => c.id === selectedMainCat);
   const subcategories = activeCategoryData ? activeCategoryData.subcategories : [];
 
   const handleMainCatChange = (catId: string) => {
@@ -24,7 +25,7 @@ export default function AllSoapsSection({ externalSearch = "" }: AllSoapsSection
   };
 
   const filteredSoaps = useMemo(() => {
-    return SOAPS.filter((soap) => {
+    return products.filter((soap) => {
       // 1. Main Category filter
       if (selectedMainCat !== "all" && soap.mainCategory !== selectedMainCat) {
         return false;
@@ -79,11 +80,11 @@ export default function AllSoapsSection({ externalSearch = "" }: AllSoapsSection
         <div className="category-browser-container">
           {/* Main Category Tabs */}
           <div className="main-category-tabs" role="tablist" aria-label="Main Soap Categories">
-            {CATEGORIES_DATA.map((cat) => {
+            {categories.map((cat) => {
               const count =
                 cat.id === "all"
-                  ? SOAPS.length
-                  : SOAPS.filter((s) => s.mainCategory === cat.id).length;
+                  ? products.length
+                  : products.filter((s) => s.mainCategory === cat.id).length;
 
               return (
                 <button
