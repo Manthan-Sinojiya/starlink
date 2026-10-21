@@ -4,15 +4,15 @@ import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Sparkles, Copy, Check, Gift, Truck, ShieldCheck, ShoppingBag, Star, ArrowRight, Eye, RefreshCw, MessageCircle } from "lucide-react";
-import { SOAPS, FESTIVAL_PROMO, Soap } from "@/data/soaps";
+import { FESTIVAL_PROMO, Soap } from "@/data/soaps";
 import { useCart } from "@/context/CartContext";
-import { useStore } from "@/context/StoreContext";
+import { useDBStore } from "@/context/DBStoreContext";
 import { openWhatsAppDirect } from "@/utils/whatsapp";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 export default function FestivalOfferSection() {
   const { addToCart, showToast } = useCart();
-  const { primaryOffer } = useStore();
+  const { primaryOffer } = useDBStore();
   const [copied, setCopied] = useState(false);
   const [added, setAdded] = useState(false);
   const [selectedView, setSelectedView] = useState<"box" | number>("box");

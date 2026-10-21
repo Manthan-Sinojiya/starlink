@@ -110,11 +110,6 @@ export default function Footer() {
               <li>
                 <Link href="#festival-offers">Holiday Gift Sets &amp; Hampers</Link>
               </li>
-              <li>
-                <Link href="/admin" style={{ color: "var(--color-terracotta)", fontWeight: 600 }}>
-                  ⚙️ Admin Atelier Studio
-                </Link>
-              </li>
             </ul>
           </div>
         </div>

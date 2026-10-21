@@ -3,9 +3,8 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { SOAPS, Soap } from "@/data/soaps";
 import { useCart } from "@/context/CartContext";
-import { useStore } from "@/context/StoreContext";
+import { useDBStore } from "@/context/DBStoreContext";
 import { openWhatsAppDirect } from "@/utils/whatsapp";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -15,6 +14,7 @@ import WhatsAppEnquiryModal from "@/components/WhatsAppEnquiryModal";
 import Toast from "@/components/Toast";
 import ProductCard from "@/components/ProductCard";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
+import { ProductDetailSkeleton, ProductCardSkeleton } from "@/components/Skeleton";
 import {
   Star,
   ShoppingBag,
@@ -29,22 +29,23 @@ import {
 } from "lucide-react";
 
 interface ProductDetailViewProps {
-  soap?: Soap | null;
-  initialSoap?: Soap | null;
+  soap?: any;
+  initialSoap?: any;
   id?: string;
 }
 
 export default function ProductDetailView({ soap, initialSoap, id }: ProductDetailViewProps) {
   const { addToCart, setIsCartOpen, showToast } = useCart();
-  const { products, shippingSettings } = useStore();
+  const { products, shippingSettings, isLoaded } = useDBStore();
   const [quantity, setQuantity] = useState(1);
   const [isAdded, setIsAdded] = useState(false);
 
   // Dynamically resolve product from store if added via admin
   const activeSoap =
-    (id ? products.find((s) => s.id === id || s.slug === id) : null) ||
+    (id ? products.find((s) => s.id === id || s.slug === id || (s as any)._id === id) : null) ||
     soap ||
-    initialSoap;
+    initialSoap ||
+    null;
 
   const handleAddToCart = () => {
     if (!activeSoap) return;
@@ -72,6 +73,22 @@ export default function ProductDetailView({ soap, initialSoap, id }: ProductDeta
   };
 
   if (!activeSoap) {
+    if (!isLoaded) {
+      return (
+        <div className="product-detail-page-wrapper" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+          <Navbar />
+          <main id="main-content" style={{ flexGrow: 1 }}>
+            <ProductDetailSkeleton />
+          </main>
+          <Footer />
+          <CartDrawer />
+          <QuickViewModal />
+          <WhatsAppEnquiryModal />
+          <Toast />
+        </div>
+      );
+    }
+
     return (
       <div className="product-detail-page-wrapper" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <Navbar />
@@ -104,17 +121,17 @@ export default function ProductDetailView({ soap, initialSoap, id }: ProductDeta
       : null;
 
   // Filter sections so ONLY content added from admin side is displayed
-  const cleanTopNotes = activeSoap.scentPyramid?.top?.filter((n) => n && n.trim() !== "") || [];
-  const cleanHeartNotes = activeSoap.scentPyramid?.heart?.filter((n) => n && n.trim() !== "") || [];
-  const cleanBaseNotes = activeSoap.scentPyramid?.base?.filter((n) => n && n.trim() !== "") || [];
+  const cleanTopNotes = (activeSoap.scentPyramid?.top || []).filter((n: string) => n && n.trim() !== "");
+  const cleanHeartNotes = (activeSoap.scentPyramid?.heart || []).filter((n: string) => n && n.trim() !== "");
+  const cleanBaseNotes = (activeSoap.scentPyramid?.base || []).filter((n: string) => n && n.trim() !== "");
   const hasScentPyramid = cleanTopNotes.length > 0 || cleanHeartNotes.length > 0 || cleanBaseNotes.length > 0;
 
-  const cleanBenefits = (activeSoap.soapBenefits || []).filter((b) => b && b.trim() !== "");
+  const cleanBenefits = (activeSoap.soapBenefits || []).filter((b: string) => b && b.trim() !== "");
   const hasBenefits = cleanBenefits.length > 0;
 
   const hasRitual = Boolean(activeSoap.ritualHowToUse && activeSoap.ritualHowToUse.trim() !== "");
 
-  const cleanIngredients = (activeSoap.fullIngredients || []).filter((i) => i && i.trim() !== "");
+  const cleanIngredients = (activeSoap.fullIngredients || []).filter((i: string) => i && i.trim() !== "");
   const hasIngredients = cleanIngredients.length > 0;
 
   return (
@@ -285,9 +302,9 @@ export default function ProductDetailView({ soap, initialSoap, id }: ProductDeta
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
                   <Truck size={16} color="var(--color-terracotta)" />
                   <span>
-                    {shippingSettings.enableFreeThreshold
-                      ? `Free shipping on orders over ₹${shippingSettings.freeShippingThreshold.toLocaleString("en-IN")}`
-                      : `Flat shipping ₹${shippingSettings.flatRate} nationwide`}
+                    {shippingSettings?.enableFreeThreshold
+                      ? `Free shipping on orders over ₹${(shippingSettings.freeShippingThreshold || 999).toLocaleString("en-IN")}`
+                      : `Flat shipping ₹${shippingSettings?.flatRate || 99} nationwide`}
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
@@ -344,7 +361,7 @@ export default function ProductDetailView({ soap, initialSoap, id }: ProductDeta
                 Key Skin Transformation Benefits
               </h3>
               <div className="detail-benefits-grid">
-                {cleanBenefits.map((benefit, i) => (
+                {cleanBenefits.map((benefit: string, i: number) => (
                   <div key={i} className="benefit-card">
                     <Check size={16} color="var(--color-terracotta)" style={{ flexShrink: 0, marginTop: "2px" }} />
                     <span>{benefit}</span>

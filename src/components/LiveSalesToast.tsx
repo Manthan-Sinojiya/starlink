@@ -3,21 +3,24 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { SOAPS } from "@/data/soaps";
+import { useDBStore } from "@/context/DBStoreContext";
 import { Sparkles, X } from "lucide-react";
 
+const PATRON_NAMES = [
+  { name: "Elena R.", city: "Mumbai, MH", time: "2 minutes ago" },
+  { name: "Marcus K.", city: "Bengaluru, KA", time: "6 minutes ago" },
+  { name: "Chloe V.", city: "New Delhi, DL", time: "11 minutes ago" },
+  { name: "Jonathan S.", city: "Pune, MH", time: "15 minutes ago" },
+];
+
 export default function LiveSalesToast() {
+  const { products, isLoaded } = useDBStore();
   const [visible, setVisible] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
 
-  const notifications = [
-    { name: "Elena R.", city: "Seattle, WA", soap: SOAPS[0], time: "2 minutes ago" },
-    { name: "Marcus K.", city: "Denver, CO", soap: SOAPS[8], time: "6 minutes ago" },
-    { name: "Chloe V.", city: "Miami, FL", soap: SOAPS[3], time: "11 minutes ago" },
-    { name: "Jonathan S.", city: "Chicago, IL", soap: SOAPS[2], time: "15 minutes ago" },
-  ];
-
   useEffect(() => {
+    if (!isLoaded || products.length === 0) return;
+
     // Show first after 4 seconds
     const initialTimer = setTimeout(() => {
       setVisible(true);
@@ -27,7 +30,7 @@ export default function LiveSalesToast() {
     const interval = setInterval(() => {
       setVisible(false);
       setTimeout(() => {
-        setCurrentIdx((prev) => (prev + 1) % notifications.length);
+        setCurrentIdx((prev) => (prev + 1) % products.length);
         setVisible(true);
       }, 1500);
     }, 16000);
@@ -36,11 +39,14 @@ export default function LiveSalesToast() {
       clearTimeout(initialTimer);
       clearInterval(interval);
     };
-  }, [notifications.length]);
+  }, [isLoaded, products.length]);
 
-  if (!visible) return null;
+  if (!visible || !isLoaded || products.length === 0) return null;
 
-  const item = notifications[currentIdx];
+  const currentSoap = products[currentIdx % products.length];
+  const patron = PATRON_NAMES[currentIdx % PATRON_NAMES.length];
+
+  if (!currentSoap) return null;
 
   return (
     <div
@@ -65,8 +71,8 @@ export default function LiveSalesToast() {
     >
       <div style={{ width: "46px", height: "46px", borderRadius: "10px", overflow: "hidden", flexShrink: 0, border: "1px solid var(--color-border)" }}>
         <Image
-          src={item.soap.image}
-          alt={item.soap.name}
+          src={currentSoap.image}
+          alt={currentSoap.name}
           width={46}
           height={46}
           style={{ objectFit: "cover", width: "100%", height: "100%" }}
@@ -76,13 +82,13 @@ export default function LiveSalesToast() {
       <div style={{ flexGrow: 1, minWidth: 0 }}>
         <div style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", display: "flex", alignItems: "center", gap: "4px" }}>
           <Sparkles size={11} color="var(--color-terracotta)" />
-          <span>{item.name} from {item.city}</span>
+          <span>{patron.name} from {patron.city}</span>
         </div>
-        <Link href={`/products/${item.soap.id}`} style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--color-dragon-black)", display: "block", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-          Purchased {item.soap.name}
+        <Link href={`/products/${currentSoap.id}`} style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--color-dragon-black)", display: "block", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+          Purchased {currentSoap.name}
         </Link>
         <div style={{ fontSize: "0.7rem", color: "var(--color-terracotta)", fontWeight: 600 }}>
-          {item.time} • Verified Customer
+          {patron.time} • Verified Customer
         </div>
       </div>
 

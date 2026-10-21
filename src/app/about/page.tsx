@@ -25,7 +25,6 @@ import WhatsAppEnquiryModal from "@/components/WhatsAppEnquiryModal";
 import Toast from "@/components/Toast";
 import { openWhatsAppDirect } from "@/utils/whatsapp";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
-import { SOAPS } from "@/data/soaps";
 
 export default function AboutPage() {
 
@@ -100,7 +99,7 @@ export default function AboutPage() {
                   </Link>
                   <button
                     type="button"
-                    onClick={() => openWhatsAppDirect(SOAPS[0])}
+                    onClick={() => openWhatsAppDirect(null, "Hello Star Light Co.! I would like to enquire with the Atelier Concierge about your luxury artisanal soaps.")}
                     className="btn-secondary"
                     style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}
                   >

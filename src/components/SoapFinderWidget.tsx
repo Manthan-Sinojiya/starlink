@@ -4,11 +4,12 @@ import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Sparkles, ArrowRight, ShoppingBag, Check, RefreshCw } from "lucide-react";
-import { SOAPS } from "@/data/soaps";
 import { useCart } from "@/context/CartContext";
+import { useDBStore } from "@/context/DBStoreContext";
 
 export default function SoapFinderWidget() {
   const { addToCart } = useCart();
+  const { products, isLoaded } = useDBStore();
   const [selectedGoal, setSelectedGoal] = useState<string>("glow");
   const [selectedScent, setSelectedScent] = useState<string>("warm");
   const [added, setAdded] = useState(false);
@@ -27,22 +28,47 @@ export default function SoapFinderWidget() {
     { id: "floral", label: "Damask Rose & Lavender" },
   ];
 
-  // Match the soap based on preferences
+  // Match the soap dynamically based on preferences from database
   const getMatchedSoap = () => {
+    if (!products || products.length === 0) return null;
+
     if (selectedGoal === "detox") {
-      return selectedScent === "herbal" ? SOAPS[1] : SOAPS[7]; // Charcoal or Matcha
+      const match = products.find((p) =>
+        p.name.toLowerCase().includes("charcoal") ||
+        p.name.toLowerCase().includes("clay") ||
+        p.description?.toLowerCase().includes("detox") ||
+        p.mainCategory?.toLowerCase().includes("detox")
+      );
+      if (match) return match;
     }
     if (selectedGoal === "hydration") {
-      return selectedScent === "warm" ? SOAPS[5] : SOAPS[3]; // Oud or Saffron
+      const match = products.find((p) =>
+        p.name.toLowerCase().includes("saffron") ||
+        p.name.toLowerCase().includes("honey") ||
+        p.name.toLowerCase().includes("oud") ||
+        p.description?.toLowerCase().includes("hydration")
+      );
+      if (match) return match;
     }
     if (selectedGoal === "calming") {
-      return selectedScent === "floral" ? SOAPS[4] : SOAPS[6]; // Damask Rose or Lavender
+      const match = products.find((p) =>
+        p.name.toLowerCase().includes("lavender") ||
+        p.name.toLowerCase().includes("rose") ||
+        p.description?.toLowerCase().includes("calm")
+      );
+      if (match) return match;
     }
-    // Default glow
-    return selectedScent === "citrus" ? SOAPS[2] : SOAPS[0]; // Terracotta Orange or Dragon's Blood
+
+    const match = products.find((p) =>
+      p.name.toLowerCase().includes("dragon") ||
+      p.isBestseller
+    );
+    return match || products[0];
   };
 
   const matchedSoap = getMatchedSoap();
+
+  if (!isLoaded || !matchedSoap) return null;
 
   const handleAddMatched = () => {
     addToCart(matchedSoap, 1);

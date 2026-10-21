@@ -19,13 +19,13 @@ import {
 } from "lucide-react";
 import { Soap } from "@/data/soaps";
 import { useCart } from "@/context/CartContext";
-import { useStore } from "@/context/StoreContext";
+import { useDBStore } from "@/context/DBStoreContext";
 import { openWhatsAppDirect } from "@/utils/whatsapp";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 export default function SecondaryOfferSection() {
   const { addToCart, showToast } = useCart();
-  const { secondaryOffer } = useStore();
+  const { secondaryOffer } = useDBStore();
   const [copied, setCopied] = useState(false);
   const [added, setAdded] = useState(false);
   const [selectedView, setSelectedView] = useState<"box" | number>("box");

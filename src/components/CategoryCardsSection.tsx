@@ -4,7 +4,8 @@ import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Sparkles, Layers } from "lucide-react";
-import { useStore } from "@/context/StoreContext";
+import { useDBStore } from "@/context/DBStoreContext";
+import { CategoryCardSkeleton } from "@/components/Skeleton";
 
 const FALLBACK_CATEGORY_IMAGES: Record<string, { image: string; badge: string; tagline: string; botanicals: string }> = {
   face: {
@@ -53,7 +54,7 @@ function getCategoryMeta(cat: { id: string; name: string; image?: string; badge?
 }
 
 export default function CategoryCardsSection() {
-  const { categories: storeCategories, products } = useStore();
+  const { categories: storeCategories, products, isLoaded } = useDBStore();
 
   const validCategories = storeCategories.filter((c) => c.id !== "all");
 
@@ -62,9 +63,9 @@ export default function CategoryCardsSection() {
 
     const count = products.filter(
       (p) =>
-        p.mainCategory.toLowerCase() === cat.name.toLowerCase() ||
-        p.mainCategory.toLowerCase().includes(cat.name.toLowerCase()) ||
-        cat.name.toLowerCase().includes(p.mainCategory.toLowerCase())
+        p.mainCategory?.toLowerCase() === cat.name.toLowerCase() ||
+        p.mainCategory?.toLowerCase().includes(cat.name.toLowerCase()) ||
+        cat.name.toLowerCase().includes(p.mainCategory?.toLowerCase())
     ).length;
 
     return {
@@ -72,13 +73,12 @@ export default function CategoryCardsSection() {
       title: cat.name,
       tagline: meta.tagline,
       badge: meta.badge,
-      count: `${count || 3} Formulations`,
+      count: `${count || 0} Formulations`,
       image: meta.image,
-      href: `/#all-soaps`,
+      href: `/category/${cat.slug || cat.id}`,
       botanicals: meta.botanicals,
     };
   });
-
 
   return (
     <section id="categories" className="categories-showcase-section" aria-label="Soap Categories">
@@ -95,9 +95,17 @@ export default function CategoryCardsSection() {
           </p>
         </div>
 
-        {/* Dynamic Category Cards in sequence */}
+        {/* Dynamic Category Cards in sequence or Skeletons */}
         <div className="category-grid-4">
-          {displayCategories.map((cat) => (
+          {!isLoaded ? (
+            <>
+              <CategoryCardSkeleton />
+              <CategoryCardSkeleton />
+              <CategoryCardSkeleton />
+              <CategoryCardSkeleton />
+            </>
+          ) : (
+            displayCategories.map((cat) => (
             <Link key={cat.id} href={cat.href} className="category-card" aria-label={`Explore ${cat.title}`}>
               {/* Media Image */}
               <div className="category-card-media">
@@ -134,7 +142,7 @@ export default function CategoryCardsSection() {
                 </div>
               </div>
             </Link>
-          ))}
+          )))}
         </div>
       </div>
     </section>

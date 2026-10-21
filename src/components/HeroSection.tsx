@@ -15,70 +15,116 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Flame,
+  Award,
 } from "lucide-react";
-import { SOAPS } from "@/data/soaps";
 import { useCart } from "@/context/CartContext";
+import { useDBStore } from "@/context/DBStoreContext";
+import { HeroSkeleton } from "./Skeleton";
+
+interface HeroSlideItem {
+  id: string;
+  name: string;
+  headline?: string;
+  subheadline?: string;
+  image: string;
+  imageAlt?: string;
+  description: string;
+  price: number;
+  badge: string;
+  fragranceNotes: string[];
+  fromDB?: boolean;
+  ctaLink?: string;
+  ctaText?: string;
+}
 
 export default function HeroSection() {
   const { addToCart } = useCart();
+  const { heroSlides: dbSlides, products, isLoaded } = useDBStore();
 
-  // Curated hero showcase slides: only description and photo change with the exact same layout
-  const heroSlides = [
-    {
-      soap: SOAPS[0], // Dragon's Blood & Smoked Amber
-      description:
-        "Hand-poured with sacred wild Dragon's Blood resin, unrefined African plant butters, and steam-distilled pure essences. Cured for up to 9 weeks to preserve 100% natural glycerin.",
-    },
-    {
-      soap: SOAPS[3], // Kashmiri Saffron & Wild Blossom Honey
-      description:
-        "Infused with rare Grade-A Kashmiri crimson saffron stigmas, farm-fresh whole goat milk, and wild mountain blossom honey. Delivers an opulent, restorative lather and luminous golden glow.",
-    },
-    {
-      soap: SOAPS[2], // Terracotta French Clay & Blood Orange
-      description:
-        "Sun-drenched Sicilian blood orange peel married with mineral-dense Moroccan rhassoul and French terracotta clays. Awakens morning vitality and restores natural skin radiance.",
-    },
-    {
-      soap: SOAPS[1], // Himalayan Charcoal & White Kaolin
-      description:
-        "Dual-mineral purifying blend of steam-activated bamboo charcoal and velvety French kaolin clay. Draws away impurities and excess sebum while maintaining deep cellular moisture.",
-    },
-    {
-      soap: SOAPS[5], // Smoky Agarwood Oud & Mysore Sandalwood
-      description:
-        "Deeply grounding sacred wood resins blended with royal Mysore sandalwood and cold-pressed avocado lipids. Slow-cured for nine weeks for an ultra-dense, meditative bathing experience.",
-    },
-  ];
+  // Build slides purely from DB: prefer DB heroSlides, then DB products
+  const displaySlides: HeroSlideItem[] = (() => {
+    if (dbSlides && dbSlides.length > 0) {
+      const active = dbSlides.filter((s) => s.isActive).sort((a, b) => a.order - b.order);
+      if (active.length > 0) {
+        return active.map((s) => ({
+          id: s.id,
+          name: s.headline.replace("\n", " "),
+          headline: s.headline,
+          subheadline: s.subheadline,
+          image: s.image,
+          imageAlt: s.imageAlt,
+          description: s.description || "",
+          price: 0,
+          badge: s.badge || "Signature",
+          fragranceNotes: s.subheadline ? [s.subheadline] : ["Handcrafted Artisan Bar"],
+          fromDB: true,
+          ctaLink: s.ctaLink || "/#all-soaps",
+          ctaText: s.ctaText || "Claim Your Bar",
+        }));
+      }
+    }
+
+    if (products && products.length > 0) {
+      return products.slice(0, 3).map((p) => ({
+        id: p.id,
+        name: p.name,
+        headline: p.name,
+        subheadline: p.tagline || `${p.mainCategory} · Artisanal Masterpiece`,
+        image: p.image,
+        imageAlt: p.imageAlt || p.name,
+        description: p.description,
+        price: p.price,
+        badge: p.badge || (p.isBestseller ? "Best Seller" : "Artisanal Reserve"),
+        fragranceNotes: p.fragranceNotes?.length ? p.fragranceNotes : [p.mainCategory],
+        fromDB: true,
+        ctaLink: `/products/${p.id}`,
+        ctaText: "Shop This Bar",
+      }));
+    }
+
+    return [];
+  })();
 
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [added, setAdded] = useState(false);
 
-  const currentSlide = heroSlides[activeSlideIdx];
-  const activeSoap = currentSlide.soap;
-
   const nextSlide = useCallback(() => {
-    setActiveSlideIdx((prev) => (prev + 1) % heroSlides.length);
-  }, [heroSlides.length]);
+    if (displaySlides.length === 0) return;
+    setActiveSlideIdx((prev) => (prev + 1) % displaySlides.length);
+  }, [displaySlides.length]);
 
   const prevSlide = useCallback(() => {
-    setActiveSlideIdx((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
-  }, [heroSlides.length]);
+    if (displaySlides.length === 0) return;
+    setActiveSlideIdx((prev) => (prev - 1 + displaySlides.length) % displaySlides.length);
+  }, [displaySlides.length]);
 
   // Autoplay slider interval (5 seconds), pauses on user hover
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || displaySlides.length <= 1) return;
     const interval = setInterval(() => {
       nextSlide();
     }, 5000);
     return () => clearInterval(interval);
-  }, [isPaused, nextSlide]);
+  }, [isPaused, nextSlide, displaySlides.length]);
+
+  if (!isLoaded || displaySlides.length === 0) {
+    return <HeroSkeleton />;
+  }
+
+  const currentSlide = displaySlides[activeSlideIdx] || displaySlides[0];
+
+  // For add-to-cart, try to match a real product
+  const activeSoap = products.find((p) => p.image === currentSlide.image || p.id === currentSlide.id) || null;
 
   const handleHeroAdd = () => {
-    addToCart(activeSoap, 1);
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1600);
+    if (activeSoap) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      addToCart(activeSoap as any, 1);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1600);
+    }
   };
 
   return (
@@ -93,19 +139,36 @@ export default function HeroSection() {
 
       <div className="container">
         <div className="hero-grid">
-          {/* Left Column: Editorial Headline, Dynamic Description Slider & Actions (SAME LAYOUT) */}
+          {/* Left Column: Editorial Headline, Dynamic Description Slider & Actions */}
           <div className="hero-content">
             <div className="hero-tag">
               <Sparkles size={14} color="var(--color-terracotta)" />
-              Cold-Process Artisanal Masterwork • Small-Batch Poured
+              {currentSlide.subheadline || "Cold-Process Artisanal Masterwork • Small-Batch Poured"}
             </div>
 
-            <h1 className="hero-title">
-              Ancient Resin Wisdom. <br />
-              <span className="highlight">Silky Cold-Process</span> Luxury.
+            <h1 className="hero-title" key={`hero-h1-${activeSlideIdx}`}>
+              {currentSlide.headline ? (
+                currentSlide.headline.includes("\n") ? (
+                  <>
+                    {currentSlide.headline.split("\n")[0]} <br />
+                    <span className="highlight">
+                      {currentSlide.headline.split("\n").slice(1).join(" ")}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {currentSlide.headline}
+                  </>
+                )
+              ) : (
+                <>
+                  Ancient Resin Wisdom. <br />
+                  <span className="highlight">Silky Cold-Process</span> Luxury.
+                </>
+              )}
             </h1>
 
-            {/* Slider Description: Only description updates per slide with smooth transition */}
+            {/* Slider Description: Updates smoothly per slide */}
             <div
               style={{
                 minHeight: "4.5rem",
@@ -127,8 +190,8 @@ export default function HeroSection() {
             </div>
 
             <div className="hero-cta-group">
-              <Link href="#all-soaps" className="btn-primary">
-                Shop Collection <ArrowRight size={17} />
+              <Link href={currentSlide.ctaLink || "#all-soaps"} className="btn-primary">
+                {currentSlide.ctaText || "Claim Your Bar"} <ArrowRight size={17} />
               </Link>
               <Link href="#festival-offers" className="btn-secondary">
                 Festival Offers (25% Off)
@@ -154,7 +217,7 @@ export default function HeroSection() {
                     color: "var(--color-text-tertiary)",
                   }}
                 >
-                  Featured Formulas ({activeSlideIdx + 1} / {heroSlides.length}):
+                  Featured Formulas ({activeSlideIdx + 1} / {displaySlides.length}):
                 </div>
 
                 {/* Slider Prev / Next Arrows */}
@@ -220,9 +283,9 @@ export default function HeroSection() {
 
               {/* Slider Dots / Tabs */}
               <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", alignItems: "center" }}>
-                {heroSlides.map((slide, idx) => (
+                {displaySlides.map((slide, idx) => (
                   <button
-                    key={slide.soap.id}
+                    key={slide.id}
                     type="button"
                     onClick={() => setActiveSlideIdx(idx)}
                     style={{
@@ -240,7 +303,7 @@ export default function HeroSection() {
                       cursor: "pointer",
                     }}
                   >
-                    {slide.soap.name.split("&")[0].trim()}
+                    {slide.name.split("&")[0].trim()}
                   </button>
                 ))}
               </div>
@@ -250,11 +313,11 @@ export default function HeroSection() {
           {/* Right Column: Hero Visual Card (SAME LAYOUT, PHOTOS UPDATE WITH SLIDE) */}
           <div className="hero-visual-card">
             <div className="hero-visual-image-wrapper">
-              <Link href={`/products/${activeSoap.id}`}>
+              <Link href={currentSlide.ctaLink || "/#all-soaps"}>
                 <Image
-                  key={`hero-img-${activeSoap.id}`}
-                  src={activeSoap.image}
-                  alt={activeSoap.name}
+                  key={`hero-img-${currentSlide.id}`}
+                  src={currentSlide.image}
+                  alt={currentSlide.imageAlt || currentSlide.name}
                   width={720}
                   height={620}
                   priority
@@ -342,7 +405,7 @@ export default function HeroSection() {
 
               <div className="hero-floating-badge">
                 <Star size={14} fill="#e17159" color="#e17159" />
-                <span>{activeSoap.badge || "Signature"}</span> • {activeSoap.rating} ★ ({activeSoap.reviewsCount} Reviews)
+                <span>{currentSlide.badge || "Signature"}</span>
               </div>
 
               {/* Pulsing Flash Banner */}
@@ -381,21 +444,21 @@ export default function HeroSection() {
             {/* Visual Card Footer: Updates with active soap and Indian Rupee price */}
             <div className="hero-card-footer">
               <div>
-                <Link href={`/products/${activeSoap.id}`}>
+                <Link href={currentSlide.ctaLink || "/#all-soaps"}>
                   <h2
                     className="hero-card-soap-title"
                     style={{ transition: "color 0.2s" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-terracotta)")}
                     onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dragon-black)")}
                   >
-                    {activeSoap.name}
+                    {currentSlide.name}
                   </h2>
                 </Link>
                 <p className="hero-card-soap-meta">
-                  {activeSoap.cureTime} • {activeSoap.fragranceNotes.slice(0, 2).join(" & ")} •{" "}
-                  <strong style={{ color: "var(--color-dragon-black)", fontSize: "0.95rem" }}>
-                    ₹{activeSoap.price.toLocaleString("en-IN")}
-                  </strong>
+                  {currentSlide.fragranceNotes?.slice(0, 2).join(" & ")}
+                  {currentSlide.price > 0 && (
+                    <> • <strong style={{ color: "var(--color-dragon-black)", fontSize: "0.95rem" }}>₹{currentSlide.price.toLocaleString("en-IN")}</strong></>
+                  )}
                 </p>
               </div>
 

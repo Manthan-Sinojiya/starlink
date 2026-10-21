@@ -1,6 +1,10 @@
-import { SOAPS } from "@/data/soaps";
+"use client";
+
+import { useDBStore } from "@/context/DBStoreContext";
 
 export default function SeoStructuredData() {
+  const { products, isLoaded } = useDBStore();
+
   const schemaOrganization = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -19,7 +23,7 @@ export default function SeoStructuredData() {
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: "Artisanal Soap Collection",
-    itemListElement: SOAPS.map((soap, index) => ({
+    itemListElement: products.map((soap, index) => ({
       "@type": "ListItem",
       position: index + 1,
       item: {
@@ -29,9 +33,9 @@ export default function SeoStructuredData() {
         image: `https://starlightsoaps.com${soap.image}`,
         offers: {
           "@type": "Offer",
-          priceCurrency: "USD",
+          priceCurrency: "INR",
           price: soap.price.toFixed(2),
-          availability: "https://schema.org/InStock"
+          availability: soap.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
         },
         aggregateRating: {
           "@type": "AggregateRating",

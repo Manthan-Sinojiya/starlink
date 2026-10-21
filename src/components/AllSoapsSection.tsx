@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useStore } from "@/context/StoreContext";
+import { useDBStore } from "@/context/DBStoreContext";
 import ProductCard from "./ProductCard";
+import { ProductCardSkeleton, Skeleton } from "./Skeleton";
 import { Sparkles, SlidersHorizontal, Layers, Check } from "lucide-react";
 
 interface AllSoapsSectionProps {
@@ -10,13 +11,13 @@ interface AllSoapsSectionProps {
 }
 
 export default function AllSoapsSection({ externalSearch = "" }: AllSoapsSectionProps) {
-  const { products, categories } = useStore();
+  const { products, categories, isLoaded, isLoadingProducts } = useDBStore();
   const [selectedMainCat, setSelectedMainCat] = useState<string>("all");
   const [selectedSubCat, setSelectedSubCat] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("featured");
 
   // Get active subcategories based on the chosen main category
-  const activeCategoryData = categories.find((c) => c.id === selectedMainCat);
+  const activeCategoryData = categories.find((c) => (c.id && c.id === selectedMainCat) || c.name === selectedMainCat || c.slug === selectedMainCat);
   const subcategories = activeCategoryData ? activeCategoryData.subcategories : [];
 
   const handleMainCatChange = (catId: string) => {
@@ -27,15 +28,22 @@ export default function AllSoapsSection({ externalSearch = "" }: AllSoapsSection
   const filteredSoaps = useMemo(() => {
     return products.filter((soap) => {
       // 1. Main Category filter
-      if (selectedMainCat !== "all" && soap.mainCategory !== selectedMainCat) {
-        return false;
+      if (selectedMainCat !== "all") {
+        const catTarget = (activeCategoryData?.name || selectedMainCat).toLowerCase();
+        const catSlug = (activeCategoryData?.slug || "").toLowerCase();
+        const matchesCat =
+          soap.mainCategory?.toLowerCase() === catTarget ||
+          soap.category?.toLowerCase() === catTarget ||
+          (Boolean(catSlug) && soap.mainCategory?.toLowerCase() === catSlug) ||
+          soap.mainCategory?.toLowerCase() === selectedMainCat.toLowerCase();
+        if (!matchesCat) return false;
       }
 
       // 2. Subcategory filter
       if (selectedSubCat !== "all") {
         if (selectedSubCat === "Best Sellers") {
           if (!soap.isBestseller) return false;
-        } else if (soap.subCategory !== selectedSubCat) {
+        } else if (soap.subCategory?.toLowerCase() !== selectedSubCat.toLowerCase()) {
           return false;
         }
       }
@@ -43,10 +51,10 @@ export default function AllSoapsSection({ externalSearch = "" }: AllSoapsSection
       // 3. Search query filter
       if (externalSearch.trim() !== "") {
         const q = externalSearch.toLowerCase();
-        const matchesName = soap.name.toLowerCase().includes(q);
-        const matchesNotes = soap.fragranceNotes.some((n) => n.toLowerCase().includes(q));
-        const matchesIngredients = soap.keyIngredients.some((i) => i.toLowerCase().includes(q));
-        const matchesSub = soap.subCategory.toLowerCase().includes(q);
+        const matchesName = soap.name?.toLowerCase().includes(q);
+        const matchesNotes = soap.fragranceNotes?.some((n) => n.toLowerCase().includes(q));
+        const matchesIngredients = soap.keyIngredients?.some((i) => i.toLowerCase().includes(q));
+        const matchesSub = soap.subCategory?.toLowerCase().includes(q);
         return matchesName || matchesNotes || matchesIngredients || matchesSub;
       }
 
@@ -58,21 +66,21 @@ export default function AllSoapsSection({ externalSearch = "" }: AllSoapsSection
       if (sortBy === "reviews") return b.reviewsCount - a.reviewsCount;
       return 0; // default featured
     });
-  }, [selectedMainCat, selectedSubCat, sortBy, externalSearch]);
+  }, [selectedMainCat, selectedSubCat, sortBy, externalSearch, activeCategoryData, products]);
 
   return (
-    <section id="all-soaps" className="all-soaps-section" aria-label="Artisanal Soap Collection">
+    <section id="all-soaps" className="all-soaps-section" aria-label="Sacred Healing & Artisanal Collection">
       <div className="container">
         {/* Section Header */}
         <div className="section-header">
           <span className="section-tag">
             <Sparkles size={14} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px" }} />
-            The Complete Soap Atelier
+            The Sacred Healing Atelier
           </span>
-          <h2 className="section-title">Browse by Category &amp; Skin Benefit</h2>
+          <h2 className="section-title">Sacred Healing Creations &amp; Vibrational Art</h2>
           <p className="section-subtitle">
-            Every formula is strictly 100% cold-processed soap. Explore targeted remedies for pore clarifying, 
-            royal hydration, sensitive calming, and festive gifting.
+            Explore handcrafted healing soaps, consecrated stained glass &amp; copper yantras, sacred mandalas, 
+            crystal chakra necklaces, and aura cleansers charged with divine frequencies.
           </p>
         </div>
 
@@ -80,25 +88,48 @@ export default function AllSoapsSection({ externalSearch = "" }: AllSoapsSection
         <div className="category-browser-container">
           {/* Main Category Tabs */}
           <div className="main-category-tabs" role="tablist" aria-label="Main Soap Categories">
-            {categories.map((cat) => {
-              const count =
-                cat.id === "all"
-                  ? products.length
-                  : products.filter((s) => s.mainCategory === cat.id).length;
-
-              return (
+            {!isLoaded || isLoadingProducts ? (
+              <div style={{ display: "flex", gap: "10px" }}>
+                <Skeleton width="130px" height="40px" borderRadius="9999px" />
+                <Skeleton width="150px" height="40px" borderRadius="9999px" />
+                <Skeleton width="140px" height="40px" borderRadius="9999px" />
+                <Skeleton width="160px" height="40px" borderRadius="9999px" />
+              </div>
+            ) : (
+              <>
                 <button
-                  key={cat.id}
                   type="button"
                   role="tab"
-                  aria-selected={selectedMainCat === cat.id}
-                  className={`main-cat-tab ${selectedMainCat === cat.id ? "active" : ""}`}
-                  onClick={() => handleMainCatChange(cat.id)}
+                  aria-selected={selectedMainCat === "all"}
+                  className={`main-cat-tab ${selectedMainCat === "all" ? "active" : ""}`}
+                  onClick={() => handleMainCatChange("all")}
                 >
-                  {cat.name} <span style={{ opacity: 0.75, fontSize: "0.76rem" }}>({count})</span>
+                  All Formulations <span style={{ opacity: 0.75, fontSize: "0.76rem" }}>({products.length})</span>
                 </button>
-              );
-            })}
+                {categories.filter((c) => c.id !== "all" && c.slug !== "all").map((cat) => {
+                  const catKey = cat.id || cat.slug || cat.name;
+                  const catNameLower = cat.name.toLowerCase();
+                  const catSlugLower = (cat.slug || "").toLowerCase();
+                  const count = products.filter((s) => 
+                    (s.mainCategory && s.mainCategory.toLowerCase() === catNameLower) ||
+                    (s.category && s.category.toLowerCase() === catNameLower) ||
+                    (catSlugLower && s.mainCategory && s.mainCategory.toLowerCase() === catSlugLower)
+                  ).length;
+                  return (
+                    <button
+                      key={catKey}
+                      type="button"
+                      role="tab"
+                      aria-selected={selectedMainCat === catKey || selectedMainCat === cat.name}
+                      className={`main-cat-tab ${selectedMainCat === catKey || selectedMainCat === cat.name ? "active" : ""}`}
+                      onClick={() => handleMainCatChange(catKey)}
+                    >
+                      {cat.name} <span style={{ opacity: 0.75, fontSize: "0.76rem" }}>({count})</span>
+                    </button>
+                  );
+                })}
+              </>
+            )}
           </div>
 
           {/* Sub-Category Pills and Sort Dropdown */}
@@ -108,24 +139,34 @@ export default function AllSoapsSection({ externalSearch = "" }: AllSoapsSection
                 <Layers size={13} /> Subcategory:
               </span>
 
-              <button
-                type="button"
-                className={`sub-cat-pill ${selectedSubCat === "all" ? "active" : ""}`}
-                onClick={() => setSelectedSubCat("all")}
-              >
-                All in {selectedMainCat === "all" ? "Atelier" : selectedMainCat}
-              </button>
+              {!isLoaded || isLoadingProducts ? (
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <Skeleton width="100px" height="32px" borderRadius="9999px" />
+                  <Skeleton width="120px" height="32px" borderRadius="9999px" />
+                  <Skeleton width="110px" height="32px" borderRadius="9999px" />
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={`sub-cat-pill ${selectedSubCat === "all" ? "active" : ""}`}
+                    onClick={() => setSelectedSubCat("all")}
+                  >
+                    All in {selectedMainCat === "all" ? "Atelier" : (activeCategoryData?.name || selectedMainCat)}
+                  </button>
 
-              {subcategories.map((sub) => (
-                <button
-                  key={sub}
-                  type="button"
-                  className={`sub-cat-pill ${selectedSubCat === sub ? "active" : ""}`}
-                  onClick={() => setSelectedSubCat(sub)}
-                >
-                  {sub}
-                </button>
-              ))}
+                  {subcategories.map((sub) => (
+                    <button
+                      key={sub}
+                      type="button"
+                      className={`sub-cat-pill ${selectedSubCat === sub ? "active" : ""}`}
+                      onClick={() => setSelectedSubCat(sub)}
+                    >
+                      {sub}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
 
             {/* Sorting Dropdown */}
@@ -147,8 +188,14 @@ export default function AllSoapsSection({ externalSearch = "" }: AllSoapsSection
           </div>
         </div>
 
-        {/* 4 Cards in One Row Responsive Grid */}
-        {filteredSoaps.length > 0 ? (
+        {/* 4 Cards in One Row Responsive Grid or Skeletons */}
+        {!isLoaded || isLoadingProducts ? (
+          <div className="soap-grid-4">
+            {[...Array(8)].map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : filteredSoaps.length > 0 ? (
           <div className="soap-grid-4">
             {filteredSoaps.map((soap) => (
               <ProductCard key={soap.id} soap={soap} />

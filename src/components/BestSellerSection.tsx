@@ -1,14 +1,16 @@
 "use client";
 
 import React from "react";
-import { useStore } from "@/context/StoreContext";
+import { useDBStore } from "@/context/DBStoreContext";
 import ProductCard from "./ProductCard";
+import { ProductCardSkeleton } from "./Skeleton";
 import { Award } from "lucide-react";
 
 export default function BestSellerSection() {
-  const { products } = useStore();
+  const { products, isLoaded } = useDBStore();
   // Grab precisely the top 4 bestseller soaps for the 1-row 4-card layout
-  const bestSellers = products.filter((s) => s.isBestseller).slice(0, 4);
+  const filteredBestsellers = products.filter((s) => s.isBestseller);
+  const bestSellers = (filteredBestsellers.length > 0 ? filteredBestsellers : products).slice(0, 4);
 
   return (
     <section id="bestsellers" className="bestsellers-section" aria-label="Best Sellers">
@@ -26,11 +28,20 @@ export default function BestSellerSection() {
           </p>
         </div>
 
-        {/* 4 Cards in One Row Grid Layout */}
+        {/* 4 Cards in One Row Grid Layout or Skeletons */}
         <div className="soap-grid-4" id="bestsellers-grid">
-          {bestSellers.map((soap) => (
-            <ProductCard key={soap.id} soap={soap} />
-          ))}
+          {!isLoaded ? (
+            <>
+              <ProductCardSkeleton />
+              <ProductCardSkeleton />
+              <ProductCardSkeleton />
+              <ProductCardSkeleton />
+            </>
+          ) : (
+            bestSellers.map((soap) => (
+              <ProductCard key={soap.id} soap={soap} />
+            ))
+          )}
         </div>
       </div>
     </section>

@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Search, ShoppingBag, Menu, X, Sparkles, ChevronDown, User } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { useStore } from "@/context/StoreContext";
+import { useDBStore } from "@/context/DBStoreContext";
 import { FESTIVAL_PROMO, Soap } from "@/data/soaps";
 
 interface NavbarProps {
@@ -14,10 +14,10 @@ interface NavbarProps {
 
 export default function Navbar({ onSearchChange }: NavbarProps) {
   const { cartCount, setIsCartOpen, setQuickViewSoap } = useCart();
-  const { products, categories, currentUser } = useStore();
+  const { products, categories, currentUser } = useDBStore();
   const [isScrolled, setIsScrolled] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Soap[]>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
@@ -36,13 +36,14 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
     if (onSearchChange) onSearchChange(val);
 
     if (val.trim().length > 1) {
+      const q = val.toLowerCase();
       const filtered = products.filter(
         (s) =>
-          s.name.toLowerCase().includes(val.toLowerCase()) ||
-          s.mainCategory.toLowerCase().includes(val.toLowerCase()) ||
-          s.subCategory.toLowerCase().includes(val.toLowerCase()) ||
-          s.fragranceNotes.some((n) => n.toLowerCase().includes(val.toLowerCase())) ||
-          s.keyIngredients.some((i) => i.toLowerCase().includes(val.toLowerCase()))
+          (s.name && s.name.toLowerCase().includes(q)) ||
+          (s.mainCategory && s.mainCategory.toLowerCase().includes(q)) ||
+          (s.subCategory && s.subCategory.toLowerCase().includes(q)) ||
+          (s.fragranceNotes && s.fragranceNotes.some((n) => n.toLowerCase().includes(q))) ||
+          (s.keyIngredients && s.keyIngredients.some((i) => i.toLowerCase().includes(q)))
       );
       setSearchResults(filtered);
       setIsSearchDropdownOpen(true);
@@ -104,54 +105,201 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                 About Us
               </Link>
 
-              {/* Collection Link with Hover Menu */}
+              {/* Collection Link with 2-Column Luxury Mega-Dropdown */}
               <div
                 style={{ position: "relative" }}
                 onMouseEnter={() => setIsCategoryMenuOpen(true)}
                 onMouseLeave={() => setIsCategoryMenuOpen(false)}
               >
-                <Link href="/#all-soaps" className="nav-link" style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                  Collection <ChevronDown size={14} />
+                <Link
+                  href="/#all-soaps"
+                  className="nav-link"
+                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                >
+                  Collection <ChevronDown size={14} style={{ transform: isCategoryMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s ease" }} />
                 </Link>
 
                 {isCategoryMenuOpen && (
                   <div
                     style={{
                       position: "absolute",
-                      top: "100%",
-                      left: "-20px",
-                      width: "280px",
-                      background: "white",
-                      borderRadius: "var(--radius-md)",
-                      boxShadow: "var(--shadow-xl)",
+                      top: "calc(100% + 6px)",
+                      left: "-80px",
+                      width: "560px",
+                      background: "rgba(255, 255, 255, 0.98)",
+                      backdropFilter: "blur(16px)",
+                      borderRadius: "16px",
+                      boxShadow: "0 22px 50px rgba(17, 17, 19, 0.16), 0 4px 16px rgba(225, 113, 89, 0.08)",
                       border: "1px solid var(--color-border)",
-                      padding: "0.75rem",
-                      zIndex: 90,
+                      padding: "1rem 1.15rem 0.85rem",
+                      zIndex: 100,
+                      maxHeight: "78vh",
+                      overflowY: "auto",
                     }}
                   >
-                    {categories.filter((c) => c.id !== "all").map((cat) => (
+                    {/* Header bar */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingBottom: "0.6rem",
+                        borderBottom: "1px solid var(--color-cream-subtle)",
+                        marginBottom: "0.6rem",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.74rem",
+                          fontWeight: 700,
+                          color: "var(--color-terracotta)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                      >
+                        <Sparkles size={12} /> Curated Botanical Vault
+                      </span>
                       <Link
-                        key={cat.id}
                         href="/#all-soaps"
                         onClick={() => setIsCategoryMenuOpen(false)}
                         style={{
-                          display: "block",
-                          padding: "0.6rem 0.75rem",
-                          borderRadius: "var(--radius-sm)",
-                          fontSize: "0.85rem",
-                          fontWeight: 700,
-                          color: "var(--color-dragon-black)",
-                          transition: "background 0.15s ease",
+                          fontSize: "0.75rem",
+                          color: "var(--color-text-tertiary)",
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "3px",
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-cream-subtle)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                       >
-                        <div>{cat.name}</div>
-                        <div style={{ fontSize: "0.72rem", color: "var(--color-text-tertiary)", fontWeight: 500 }}>
-                          {cat.subcategories.slice(0, 2).join(" • ")}
-                        </div>
+                        All Formulations ({products.length}) →
                       </Link>
-                    ))}
+                    </div>
+
+                    {/* 2-Column Category Grid */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "0.4rem 0.75rem",
+                      }}
+                    >
+                      {categories
+                        .filter((c) => c.id !== "all" && c.slug !== "all")
+                        .map((cat) => {
+                          const count = products.filter(
+                            (p) =>
+                              p.mainCategory?.toLowerCase() === cat.name.toLowerCase() ||
+                              p.category?.toLowerCase() === cat.name.toLowerCase()
+                          ).length;
+
+                          return (
+                            <Link
+                              key={cat.id || cat.slug}
+                              href={`/category/${cat.slug || cat.id}`}
+                              onClick={() => setIsCategoryMenuOpen(false)}
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                padding: "0.55rem 0.75rem",
+                                borderRadius: "10px",
+                                borderLeft: "2px solid transparent",
+                                background: "transparent",
+                                transition: "all 0.16s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = "var(--color-cream-subtle)";
+                                e.currentTarget.style.borderLeftColor = "var(--color-terracotta)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = "transparent";
+                                e.currentTarget.style.borderLeftColor = "transparent";
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    fontWeight: 700,
+                                    color: "var(--color-dragon-black)",
+                                  }}
+                                >
+                                  {cat.name}
+                                </span>
+                                {count > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.68rem",
+                                      fontWeight: 600,
+                                      color: "var(--color-terracotta)",
+                                      background: "var(--color-terracotta-subtle)",
+                                      padding: "1px 6px",
+                                      borderRadius: "9999px",
+                                    }}
+                                  >
+                                    {count}
+                                  </span>
+                                )}
+                              </div>
+                              {cat.subcategories && cat.subcategories.length > 0 && (
+                                <div
+                                  style={{
+                                    fontSize: "0.71rem",
+                                    color: "var(--color-text-tertiary)",
+                                    marginTop: "2px",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {cat.subcategories.slice(0, 2).join(" · ")}
+                                </div>
+                              )}
+                            </Link>
+                          );
+                        })}
+                    </div>
+
+                    {/* Footer bar */}
+                    <div
+                      style={{
+                        borderTop: "1px solid var(--color-cream-subtle)",
+                        marginTop: "0.6rem",
+                        paddingTop: "0.55rem",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.71rem",
+                          color: "var(--color-text-tertiary)",
+                          fontStyle: "italic",
+                        }}
+                      >
+                        100% Handcrafted · Cold-Process Formulations
+                      </span>
+                      <Link
+                        href="/#all-soaps"
+                        onClick={() => setIsCategoryMenuOpen(false)}
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          color: "var(--color-terracotta)",
+                        }}
+                      >
+                        Explore Atelier Catalog →
+                      </Link>
+                    </div>
                   </div>
                 )}
               </div>
@@ -163,22 +311,6 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
 
               <Link href="/contact" className="nav-link">
                 Contact Us
-              </Link>
-
-              <Link
-                href="/admin"
-                className="nav-link"
-                style={{
-                  fontSize: "0.78rem",
-                  padding: "0.25rem 0.65rem",
-                  borderRadius: "9999px",
-                  border: "1px dashed var(--color-border)",
-                  color: "var(--color-text-secondary)",
-                  transition: "all 0.15s ease",
-                }}
-                title="Open Star Light Co. Admin Panel"
-              >
-                ⚙️ Admin
               </Link>
             </div>
 
@@ -262,44 +394,23 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                 aria-label={`Shopping Cart with ${cartCount} items`}
               >
                 <ShoppingBag size={17} />
-                <span style={{ display: "none" }} className="cart-text-label">Bag</span>
-                  <span
-                    style={{
-                      background: "rgba(255, 255, 255, 0.28)",
-                      padding: "0.1rem 0.5rem",
-                      borderRadius: "9999px",
-                      fontSize: "0.78rem",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {cartCount}
-                  </span>
-                </button>
+                <span className="cart-text-label">Bag</span>
+                <span className="cart-count-pill">
+                  {cartCount}
+                </span>
+              </button>
 
-                {/* Patron Account / Login Trigger */}
-                <Link
-                  href="/login"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    fontSize: "0.84rem",
-                    fontWeight: 600,
-                    color: "var(--color-dragon-black)",
-                    padding: "0.45rem 0.75rem",
-                    borderRadius: "9999px",
-                    border: "1px solid var(--color-border)",
-                    backgroundColor: "rgba(255, 255, 255, 0.7)",
-                    textDecoration: "none",
-                    transition: "all 0.2s ease",
-                  }}
-                  title={currentUser ? `Signed in as ${currentUser.name}` : "Patron Sign In / Register"}
-                >
-                  <User size={15} color="var(--color-terracotta)" />
-                  <span style={{ display: "none" }} className="cart-text-label">
-                    {currentUser ? currentUser.name.split(" ")[0] : "Sign In"}
-                  </span>
-                </Link>
+              {/* Patron Account / Login Trigger */}
+              <Link
+                href="/login"
+                className="nav-patron-btn"
+                title={currentUser ? `Signed in as ${currentUser.name}` : "Patron Sign In / Register"}
+              >
+                <User size={15} color="var(--color-terracotta)" />
+                <span className="cart-text-label">
+                  {currentUser ? currentUser.name.split(" ")[0] : "Sign In"}
+                </span>
+              </Link>
 
               {/* Mobile Menu Button */}
               <button
@@ -378,17 +489,10 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
               <Link
                 href="/login"
                 onClick={() => setIsMobileMenuOpen(false)}
-                style={{ padding: "0.45rem 0", display: "flex", alignItems: "center", gap: "6px", borderBottom: "1px solid var(--color-cream-subtle)" }}
+                style={{ padding: "0.45rem 0", display: "flex", alignItems: "center", gap: "6px" }}
               >
                 <User size={16} color="var(--color-terracotta)" />
                 <span>{currentUser ? `Account (${currentUser.name})` : "Patron Sign In / Register"}</span>
-              </Link>
-              <Link
-                href="/admin"
-                onClick={() => setIsMobileMenuOpen(false)}
-                style={{ padding: "0.45rem 0", color: "var(--color-terracotta)", display: "flex", alignItems: "center", gap: "6px" }}
-              >
-                <span>⚙️ Admin Panel</span>
               </Link>
             </div>
           </div>

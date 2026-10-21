@@ -528,7 +528,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const newOrder: Order = {
       ...orderData,
       id: `ord-${Date.now()}`,
-      orderNumber: `STL-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      orderNumber: `SLC-2026-${Math.floor(10000 + Math.random() * 90000)}`,
       createdAt: new Date().toISOString(),
     };
 
