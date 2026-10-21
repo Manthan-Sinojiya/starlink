@@ -2,24 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
 import { signToken } from "@/lib/auth";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
+  // Prevent credential brute forcing (5 attempts per min per IP)
+  const rl = checkRateLimit(req, { limit: 5, windowMs: 60_000, prefix: "auth-login" });
+  if (!rl.success) return rateLimitResponse(rl);
+
   try {
     await dbConnect();
     const body = await req.json();
     const { email, password } = body;
 
-    if (!email || !password) {
+    if (!email || !password || typeof email !== "string" || typeof password !== "string") {
       return NextResponse.json(
-        { success: false, message: "Email and password are required" },
+        { success: false, message: "Valid email and password are required" },
         { status: 400 }
       );
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const sanitizedEmail = email.toLowerCase().trim().slice(0, 100);
+    const user = await User.findOne({ email: sanitizedEmail });
     if (!user) {
       return NextResponse.json(
-        { success: false, message: "No account found with this email. Please register." },
+        { success: false, message: "Invalid email or password." },
         { status: 401 }
       );
     }

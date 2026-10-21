@@ -84,7 +84,10 @@ function DashboardContent() {
         setErrorMessage(res.message);
       } else {
         setSuccessMessage(res.message);
-        if (res.user?.role === "admin") {
+        const redirectUrl = searchParams.get("redirect");
+        if (redirectUrl) {
+          setTimeout(() => router.push(redirectUrl), 600);
+        } else if (res.user?.role === "admin") {
           setTimeout(() => router.push("/backoffice"), 800);
         }
       }
@@ -118,6 +121,10 @@ function DashboardContent() {
         setErrorMessage(res.message);
       } else {
         setSuccessMessage(res.message);
+        const redirectUrl = searchParams.get("redirect");
+        if (redirectUrl) {
+          setTimeout(() => router.push(redirectUrl), 600);
+        }
       }
     } catch {
       setErrorMessage("Registration failed. Please try again.");

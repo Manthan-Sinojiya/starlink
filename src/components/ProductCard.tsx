@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ShoppingBag, Check, Eye, Sparkles, MessageCircle } from "lucide-react";
+import { ShoppingBag, Check, Eye, Sparkles, MessageCircle, Minus, Plus } from "lucide-react";
 import { Soap } from "@/data/soaps";
 import { useCart } from "@/context/CartContext";
 import { openWhatsAppDirect } from "@/utils/whatsapp";
@@ -14,8 +14,11 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ soap }: ProductCardProps) {
-  const { addToCart, setQuickViewSoap, showToast } = useCart();
+  const { cart, addToCart, removeFromCart, updateQuantity, setQuickViewSoap, showToast } = useCart();
   const [isAddedRecently, setIsAddedRecently] = useState(false);
+
+  const cartItem = cart.find((item) => item.soap.id === soap.id || (item.soap as any)._id === soap.id);
+  const quantityInCart = cartItem ? cartItem.quantity : 0;
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -118,24 +121,65 @@ export default function ProductCard({ soap }: ProductCardProps) {
           </div>
         </div>
 
-        {/* Action Buttons: Add to Bag + WhatsApp Enquire */}
+        {/* Action Buttons: Add to Bag (or Stepper) + WhatsApp Enquire */}
         <div className="card-actions-group">
-          <button
-            type="button"
-            className={`card-add-bag-btn ${isAddedRecently ? "added" : ""}`}
-            onClick={handleAddToCart}
-            aria-label={`Add ${soap.name} to cart`}
-          >
-            {isAddedRecently ? (
-              <>
-                <Check size={15} /> Added to Bag
-              </>
-            ) : (
-              <>
-                <ShoppingBag size={15} /> Add to Bag
-              </>
-            )}
-          </button>
+          {quantityInCart > 0 ? (
+            <div
+              className="card-qty-stepper"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+            >
+              <button
+                type="button"
+                className="card-qty-btn minus"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (quantityInCart <= 1) {
+                    removeFromCart(soap.id);
+                    showToast(`Removed "${soap.name}" from bag`);
+                  } else {
+                    updateQuantity(soap.id, quantityInCart - 1);
+                  }
+                }}
+                aria-label="Decrease quantity"
+              >
+                <Minus size={14} />
+              </button>
+              <span className="card-qty-value">{quantityInCart}</span>
+              <button
+                type="button"
+                className="card-qty-btn plus"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  updateQuantity(soap.id, quantityInCart + 1);
+                }}
+                aria-label="Increase quantity"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={`card-add-bag-btn ${isAddedRecently ? "added" : ""}`}
+              onClick={handleAddToCart}
+              aria-label={`Add ${soap.name} to cart`}
+            >
+              {isAddedRecently ? (
+                <>
+                  <Check size={15} /> Added to Bag
+                </>
+              ) : (
+                <>
+                  <ShoppingBag size={15} /> Add to Bag
+                </>
+              )}
+            </button>
+          )}
 
           <button
             type="button"

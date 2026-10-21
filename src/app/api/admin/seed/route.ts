@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
 import Category from "@/models/Category";
@@ -6,13 +7,41 @@ import Product from "@/models/Product";
 import HeroSection from "@/models/HeroSection";
 import ShippingSettings from "@/models/ShippingSettings";
 import { SOAPS, CATEGORIES_DATA, DEFAULT_SHIPPING_SETTINGS } from "@/data/soaps";
+import { requireAdmin } from "@/lib/auth";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rateLimit";
 
 // GET /api/admin/seed - seeds the database with admin user, categories, products, shipping & hero
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
+  await connection();
+
+  // Rate limit seed calls (max 5 per minute)
+  const rl = checkRateLimit(req, { limit: 5, windowMs: 60_000, prefix: "seed" });
+  if (!rl.success) return rateLimitResponse(rl);
+
   try {
-    await dbConnect();
     const { searchParams } = new URL(req.url);
     const force = searchParams.get("force") === "true";
+    const secret = searchParams.get("secret");
+
+    // Require admin token or valid secret query key/header for ANY seed or wipe execution
+    const admin = requireAdmin(req);
+    const validSeedSecret = process.env.ADMIN_SEED_SECRET || process.env.ADMIN_PASSWORD;
+    const headerSecret = req.headers.get("x-seed-secret");
+    const isAuthorizedSecret =
+      Boolean(validSeedSecret) &&
+      (secret === validSeedSecret || headerSecret === validSeedSecret);
+
+    if (!admin && !isAuthorizedSecret) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized: Admin authentication or valid SEED_SECRET required to access seed route.",
+        },
+        { status: 403 }
+      );
+    }
+
+    await dbConnect();
 
     // 1. Seed admin user
     const adminEmail = process.env.ADMIN_EMAIL || "admin@starlight.com";
@@ -30,7 +59,7 @@ export async function GET(req: Request) {
       });
     }
 
-    // If force is specified, remove outdated categories & products
+    // If force is specified, delete products and categories to freshly reseed
     if (force) {
       await Category.deleteMany({});
       await Product.deleteMany({});
@@ -160,12 +189,15 @@ export async function GET(req: Request) {
       message: "Database seeded successfully with products, categories, shipping & hero slides.",
       adminEmail,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error && typeof error === "object" && "digest" in error && String(error.digest).startsWith("NEXT_")) {
+      throw error;
+    }
     console.error("Seed error:", error);
     return NextResponse.json({ success: false, message: "Seeding failed", error: String(error) }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   return GET(req);
 }

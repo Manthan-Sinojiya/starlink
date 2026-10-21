@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import ShippingSettings from "@/models/ShippingSettings";
 import { requireAdmin } from "@/lib/auth";
 
-
 export async function GET() {
+  await connection();
   try {
     await dbConnect();
     let settings = await ShippingSettings.findOne({}).lean();
@@ -21,7 +22,10 @@ export async function GET() {
     }
 
     return NextResponse.json({ success: true, settings });
-  } catch (error) {
+  } catch (error: any) {
+    if (error && typeof error === "object" && "digest" in error && String(error.digest).startsWith("NEXT_")) {
+      throw error;
+    }
     console.error("Get shipping error:", error);
     return NextResponse.json({ success: false, message: "Failed to fetch shipping settings" }, { status: 500 });
   }

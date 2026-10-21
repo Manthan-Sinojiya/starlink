@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import Order from "@/models/Order";
 import { getUserFromRequest, requireAdmin } from "@/lib/auth";
 
-
 // GET single order
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  await connection();
   try {
     const jwtUser = getUserFromRequest(req);
     if (!jwtUser) return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 });
@@ -22,7 +23,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     return NextResponse.json({ success: true, order });
-  } catch (error) {
+  } catch (error: any) {
+    if (error && typeof error === "object" && "digest" in error && String(error.digest).startsWith("NEXT_")) {
+      throw error;
+    }
     console.error("Get order error:", error);
     return NextResponse.json({ success: false, message: "Server error" }, { status: 500 });
   }

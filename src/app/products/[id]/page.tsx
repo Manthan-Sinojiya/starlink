@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import Product from "@/models/Product";
 import ProductDetailView from "@/components/ProductDetailView";
@@ -9,22 +10,8 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export async function generateStaticParams() {
-  try {
-    await dbConnect();
-    const products = await Product.find({}, "slug _id").lean();
-    if (products && products.length > 0) {
-      return products.map((p: any) => ({
-        id: String(p.slug || p._id),
-      }));
-    }
-  } catch (e) {
-    console.warn("DB connection in build generateStaticParams:", e);
-  }
-  return [{ id: "dragons-blood" }];
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  await connection();
   const { id } = await params;
   try {
     await dbConnect();
@@ -74,6 +61,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 async function ProductDetailsContent({ params }: PageProps) {
+  await connection();
   const { id } = await params;
   let initialSoap: any = null;
 

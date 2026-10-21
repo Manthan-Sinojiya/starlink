@@ -3,9 +3,14 @@ import crypto from "crypto";
 import dbConnect from "@/lib/dbConnect";
 import Order from "@/models/Order";
 import mongoose from "mongoose";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rateLimit";
 
 // Verify Razorpay payment and update order
 export async function POST(req: NextRequest) {
+  // Rate limit payment verification attempts (max 15/min per IP)
+  const rl = checkRateLimit(req, { limit: 15, windowMs: 60_000, prefix: "payment-verify" });
+  if (!rl.success) return rateLimitResponse(rl);
+
   try {
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature, orderId } = await req.json();
 
@@ -16,20 +21,49 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const isSimulated =
-      razorpayOrderId.startsWith("rzp_sim_") ||
-      razorpayPaymentId.startsWith("pay_sim_");
+    const hasSimulatedId =
+      String(razorpayOrderId).startsWith("rzp_sim_") ||
+      String(razorpayPaymentId).startsWith("pay_sim_");
+
+    if (process.env.NODE_ENV === "production" && hasSimulatedId) {
+      return NextResponse.json(
+        { success: false, message: "Simulated payments are strictly disabled in production." },
+        { status: 403 }
+      );
+    }
+
+    const isSimulated = process.env.NODE_ENV !== "production" && hasSimulatedId;
 
     if (!isSimulated) {
       const keySecret = process.env.RAZORPAY_KEY_SECRET;
-      if (keySecret && !keySecret.includes("YourKeySecretHere")) {
+      if (!keySecret || keySecret.includes("YourKeySecretHere")) {
+        if (process.env.NODE_ENV === "production") {
+          return NextResponse.json(
+            { success: false, message: "Payment gateway configuration error." },
+            { status: 500 }
+          );
+        }
+      } else {
+        if (!razorpaySignature) {
+          return NextResponse.json(
+            { success: false, message: "Missing payment signature." },
+            { status: 400 }
+          );
+        }
+
         const body = razorpayOrderId + "|" + razorpayPaymentId;
         const expectedSignature = crypto
           .createHmac("sha256", keySecret)
           .update(body.toString())
           .digest("hex");
 
-        if (expectedSignature !== razorpaySignature) {
+        const expectedBuf = Buffer.from(expectedSignature, "utf8");
+        const actualBuf = Buffer.from(String(razorpaySignature), "utf8");
+        const isValid =
+          expectedBuf.length === actualBuf.length &&
+          crypto.timingSafeEqual(expectedBuf, actualBuf);
+
+        if (!isValid) {
           return NextResponse.json(
             { success: false, message: "Payment verification signature mismatch." },
             { status: 400 }

@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { uploadToCloudinary } from "@/lib/cloudinary";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
+  // Rate limit uploads (max 20 per minute)
+  const rl = checkRateLimit(req, { limit: 20, windowMs: 60_000, prefix: "upload" });
+  if (!rl.success) return rateLimitResponse(rl);
+
   try {
     const admin = requireAdmin(req);
     if (!admin) {

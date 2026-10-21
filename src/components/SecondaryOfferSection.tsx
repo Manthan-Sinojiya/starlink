@@ -16,6 +16,8 @@ import {
   ShieldCheck,
   ArrowRight,
   Eye,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Soap } from "@/data/soaps";
 import { useCart } from "@/context/CartContext";
@@ -54,6 +56,41 @@ export default function SecondaryOfferSection() {
   if (!secondaryOffer || !secondaryOffer.isActive) return null;
 
   const includedBars = secondaryOffer.bars || [];
+
+  const allSlides = [
+    {
+      type: "box" as const,
+      name: secondaryOffer.title,
+      image: secondaryOffer.mainImage,
+      label: "Full Curation Set",
+    },
+    ...includedBars.map((bar, idx) => ({
+      type: idx,
+      name: bar.name,
+      image: bar.image,
+      label: `Bar 0${idx + 1}: ${bar.name}`,
+    })),
+  ];
+
+  const currentSlideIndex = selectedView === "box" ? 0 : (typeof selectedView === "number" ? selectedView + 1 : 0);
+
+  const goToSlide = (index: number) => {
+    if (index === 0) {
+      setSelectedView("box");
+    } else {
+      setSelectedView(index - 1);
+    }
+  };
+
+  const handlePrevSlide = () => {
+    const newIdx = (currentSlideIndex - 1 + allSlides.length) % allSlides.length;
+    goToSlide(newIdx);
+  };
+
+  const handleNextSlide = () => {
+    const newIdx = (currentSlideIndex + 1) % allSlides.length;
+    goToSlide(newIdx);
+  };
   const activeBar =
     typeof selectedView === "number" && includedBars[selectedView]
       ? includedBars[selectedView]
@@ -138,7 +175,28 @@ export default function SecondaryOfferSection() {
                 </span>
               </div>
 
+              {/* Left / Right Carousel Slider Arrows */}
+              <button
+                type="button"
+                onClick={handlePrevSlide}
+                className="collector-slider-arrow prev"
+                aria-label="Previous item in curation"
+                title="Previous item"
+              >
+                <ChevronLeft size={22} />
+              </button>
+              <button
+                type="button"
+                onClick={handleNextSlide}
+                className="collector-slider-arrow next"
+                aria-label="Next item in curation"
+                title="Next item"
+              >
+                <ChevronRight size={22} />
+              </button>
+
               <Image
+                key={displayImage}
                 src={displayImage}
                 alt={displayTitle}
                 width={720}
@@ -147,19 +205,37 @@ export default function SecondaryOfferSection() {
                 className="collector-box-img"
               />
 
+              {/* Slider Dots Indicator */}
+              <div className="collector-slider-dots">
+                {allSlides.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => goToSlide(i)}
+                    className={`slider-dot ${currentSlideIndex === i ? "active" : ""}`}
+                    aria-label={`Go to slide ${i + 1}`}
+                  />
+                ))}
+              </div>
+
               <div className="collector-image-caption-bar">
                 <span className="caption-text">
                   Viewing: <strong>{displayTitle}</strong>
                 </span>
-                {selectedView !== "box" && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedView("box")}
-                    className="caption-reset-btn"
-                  >
-                    <RefreshCw size={12} /> View Complete Set
-                  </button>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span className="collector-slide-counter">
+                    {currentSlideIndex + 1} / {allSlides.length}
+                  </span>
+                  {selectedView !== "box" && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedView("box")}
+                      className="caption-reset-btn"
+                    >
+                      <RefreshCw size={12} /> View Full Set
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -168,15 +244,35 @@ export default function SecondaryOfferSection() {
               <div className="bars-nav-header">
                 <div>
                   <h4 className="bars-nav-title">Included Inside The Curation:</h4>
-                  <p className="bars-nav-subtitle">Click any formula to inspect active botanicals</p>
+                  <p className="bars-nav-subtitle">Click any formula or use &larr; &rarr; arrows to browse</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedView("box")}
-                  className={`box-overview-tab-btn ${selectedView === "box" ? "active" : ""}`}
-                >
-                  <Eye size={13} /> Full Set Overview
-                </button>
+                <div className="bars-nav-controls">
+                  <button
+                    type="button"
+                    onClick={handlePrevSlide}
+                    className="bars-scroll-btn prev"
+                    aria-label="Previous formula"
+                    title="Previous formula"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextSlide}
+                    className="bars-scroll-btn next"
+                    aria-label="Next formula"
+                    title="Next formula"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedView("box")}
+                    className={`box-overview-tab-btn ${selectedView === "box" ? "active" : ""}`}
+                  >
+                    <Eye size={13} /> Full Set Overview
+                  </button>
+                </div>
               </div>
 
               {/* 3 Interactive Soap Cards */}

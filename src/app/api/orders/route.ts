@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import Order from "@/models/Order";
 import User from "@/models/User";
 import { getUserFromRequest, requireAdmin } from "@/lib/auth";
 
-
 // GET orders - admin gets all, customer gets their own
 export async function GET(req: NextRequest) {
+  await connection();
   try {
     const jwtUser = getUserFromRequest(req);
     if (!jwtUser) return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 });
@@ -21,7 +22,10 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, orders });
-  } catch (error) {
+  } catch (error: any) {
+    if (error && typeof error === "object" && "digest" in error && String(error.digest).startsWith("NEXT_")) {
+      throw error;
+    }
     console.error("Get orders error:", error);
     return NextResponse.json({ success: false, message: "Failed to fetch orders" }, { status: 500 });
   }

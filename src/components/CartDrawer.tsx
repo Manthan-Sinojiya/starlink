@@ -18,11 +18,13 @@ import {
   User,
   Home,
   CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useDBStore } from "@/context/DBStoreContext";
 import { FESTIVAL_PROMO, INDIAN_STATES } from "@/data/soaps";
 import { paymentApi } from "@/lib/api";
+import RazorpayModal from "@/components/RazorpayModal";
 
 interface RazorpayOptions {
   key: string;
@@ -30,7 +32,7 @@ interface RazorpayOptions {
   currency: string;
   name: string;
   description: string;
-  order_id: string;
+  order_id?: string;
   handler: (response: {
     razorpay_order_id: string;
     razorpay_payment_id: string;
@@ -99,6 +101,24 @@ export default function CartDrawer() {
   const [shippingPincode, setShippingPincode] = useState(currentUser?.pincode || "");
   const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "cod">("razorpay");
 
+  // Form validation errors
+  const [formErrors, setFormErrors] = useState<{
+    name?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    pincode?: string;
+  }>({});
+
+  // Razorpay interactive modal state
+  const [isRazorpayModalOpen, setIsRazorpayModalOpen] = useState(false);
+  const [activeRazorpayData, setActiveRazorpayData] = useState<{
+    amount: number;
+    orderNumber: string;
+    orderId: string;
+    dbOrderId: string;
+  } | null>(null);
+
   useEffect(() => {
     if (currentUser) {
       if (!customerName) setCustomerName(currentUser.name || "");
@@ -123,17 +143,81 @@ export default function CartDrawer() {
   const shippingCost = calculateShipping(subtotal, selectedState);
   const grandTotal = subtotal === 0 ? 0 : total + shippingCost;
 
+  const validateForm = (): boolean => {
+    const errors: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+      pincode?: string;
+    } = {};
+
+    if (!customerName.trim() || customerName.trim().length < 2) {
+      errors.name = "Please enter your full name (at least 2 characters).";
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!customerEmail.trim()) {
+      errors.email = "Email address is required.";
+    } else if (!emailRegex.test(customerEmail.trim())) {
+      errors.email = "Please enter a valid email address (e.g. name@example.com).";
+    }
+
+    const cleanPhone = customerPhone.replace(/\D/g, "");
+    if (!customerPhone.trim()) {
+      errors.phone = "Phone number is required for delivery & tracking updates.";
+    } else if (cleanPhone.length !== 10) {
+      errors.phone = "Please enter a valid 10-digit mobile number.";
+    } else if (!/^[6-9]/.test(cleanPhone)) {
+      errors.phone = "Indian mobile numbers must start with 6, 7, 8, or 9.";
+    }
+
+    if (!shippingAddress.trim() || shippingAddress.trim().length < 5) {
+      errors.address = "Please enter your complete street address (House/Flat, Street, Area).";
+    }
+
+    const cleanPincode = shippingPincode.trim();
+    if (!cleanPincode) {
+      errors.pincode = "PIN code is required.";
+    } else if (!/^[1-9][0-9]{5}$/.test(cleanPincode)) {
+      errors.pincode = "Please enter a valid 6-digit Indian PIN code.";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handlePaymentSuccess = async (
+    paymentDetails: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string },
+    orderNum?: string,
+    orderDbId?: string
+  ) => {
+    const finalOrderNumber = orderNum || activeRazorpayData?.orderNumber || confirmedOrderNumber;
+    const finalDbId = orderDbId || activeRazorpayData?.dbOrderId || finalOrderNumber;
+
+    try {
+      await paymentApi.verifyPayment({
+        razorpayOrderId: paymentDetails.razorpay_order_id,
+        razorpayPaymentId: paymentDetails.razorpay_payment_id,
+        razorpaySignature: paymentDetails.razorpay_signature,
+        orderId: finalDbId,
+      });
+    } catch (e) {
+      console.warn("Payment verification notice:", e);
+    }
+
+    setIsRazorpayModalOpen(false);
+    setConfirmedOrderNumber(finalOrderNumber);
+    setOrderComplete(true);
+    setCheckoutStep("cart");
+    clearCart();
+    setIsCheckingOut(false);
+    showToast("Payment successful! Order confirmed ✨");
+  };
+
   const handlePlaceOrder = async () => {
-    if (!customerName.trim()) {
-      showToast("Please enter your name for delivery.");
-      return;
-    }
-    if (!customerEmail.trim() || !customerEmail.includes("@")) {
-      showToast("Please enter a valid email address.");
-      return;
-    }
-    if (!shippingAddress.trim()) {
-      showToast("Please provide your delivery address.");
+    if (!validateForm()) {
+      showToast("Please fill in all required delivery details correctly.");
       return;
     }
 
@@ -154,10 +238,10 @@ export default function CartDrawer() {
       const dbOrder = await createOrder({
         customerName: customerName.trim(),
         customerEmail: customerEmail.trim().toLowerCase(),
-        customerPhone: customerPhone.trim() || "+91 98765 00000",
+        customerPhone: customerPhone.trim(),
         shippingAddress: shippingAddress.trim(),
         shippingState: selectedState,
-        shippingPincode: shippingPincode.trim() || "400001",
+        shippingPincode: shippingPincode.trim(),
         items: orderItems,
         subtotal,
         shipping: shippingCost,
@@ -168,6 +252,7 @@ export default function CartDrawer() {
       });
 
       const orderNumber = dbOrder?.orderNumber || `SLC-${Date.now().toString().slice(-6)}`;
+      const dbOrderId = (dbOrder?._id || dbOrder?.id || orderNumber) as string;
 
       // 2. If Cash on Delivery, finish immediately
       if (paymentMethod === "cod") {
@@ -176,97 +261,86 @@ export default function CartDrawer() {
         setCheckoutStep("cart");
         clearCart();
         setIsCheckingOut(false);
+        showToast("Cash on Delivery order placed successfully!");
         return;
       }
 
-      // 3. Online Payment (Razorpay or Sandbox Simulator)
+      // 3. Online Payment (Razorpay)
       try {
         const rzpOrderRes = await paymentApi.createOrder(
           Math.round(grandTotal),
           `rcpt_${orderNumber}`
         );
 
-        const isSimulated =
-          !rzpOrderRes.success ||
-          !rzpOrderRes.orderId ||
-          rzpOrderRes.orderId.startsWith("rzp_sim_");
+        let openedNative = false;
+        const keyId = rzpOrderRes.keyId;
+        const hasRealKey = keyId && !keyId.includes("YourKeyIdHere") && !keyId.includes("rzp_test_star_light");
 
-        if (!isSimulated && typeof window !== "undefined") {
-          const scriptLoaded = await loadRazorpayScript();
-          const RazorpayClass = typeof window !== "undefined" ? (window as any).Razorpay : null;
-          if (scriptLoaded && RazorpayClass) {
-            const rzpOptions: RazorpayOptions = {
-              key: rzpOrderRes.keyId,
-              amount: rzpOrderRes.amount,
-              currency: rzpOrderRes.currency || "INR",
-              name: "Star Light Co.",
-              description: "Cold-Process Artisanal Soaps",
-              order_id: rzpOrderRes.orderId,
-              prefill: {
-                name: customerName,
-                email: customerEmail,
-                contact: customerPhone,
-              },
-              theme: { color: "#e17159" },
-              handler: async (response) => {
-                try {
-                  await paymentApi.verifyPayment({
-                    razorpayOrderId: response.razorpay_order_id,
-                    razorpayPaymentId: response.razorpay_payment_id,
-                    razorpaySignature: response.razorpay_signature,
-                    orderId: (dbOrder._id || dbOrder.id || orderNumber) as string,
-                  });
-                } catch (e) {
-                  console.warn("Verification update:", e);
-                }
-                setConfirmedOrderNumber(orderNumber);
-                setOrderComplete(true);
-                setCheckoutStep("cart");
-                clearCart();
-                setIsCheckingOut(false);
-              },
-              modal: {
-                ondismiss: () => {
-                  setIsCheckingOut(false);
-                  showToast("Payment window closed. You can retry anytime.");
+        if (hasRealKey && typeof window !== "undefined") {
+          try {
+            const scriptLoaded = await loadRazorpayScript();
+            const RazorpayClass = (window as any).Razorpay;
+            if (scriptLoaded && RazorpayClass) {
+              const rzpOptions: RazorpayOptions = {
+                key: keyId,
+                amount: rzpOrderRes.amount,
+                currency: rzpOrderRes.currency || "INR",
+                name: "Star Light Co.",
+                description: "Artisanal Handcrafted Soaps",
+                order_id: rzpOrderRes.orderId.startsWith("rzp_sim_") ? undefined : rzpOrderRes.orderId,
+                prefill: {
+                  name: customerName,
+                  email: customerEmail,
+                  contact: customerPhone,
                 },
-              },
-            };
+                theme: { color: "#e17159" },
+                handler: async (response) => {
+                  await handlePaymentSuccess({
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                  }, orderNumber, dbOrderId);
+                },
+                modal: {
+                  ondismiss: () => {
+                    setIsCheckingOut(false);
+                    showToast("Payment window closed. You can retry anytime.");
+                  },
+                },
+              };
 
-            const rzp = new RazorpayClass(rzpOptions);
-            rzp.open();
-            return;
+              const rzp = new RazorpayClass(rzpOptions);
+              rzp.open();
+              openedNative = true;
+            }
+          } catch (nativeErr) {
+            console.warn("Native Razorpay open error:", nativeErr);
           }
         }
 
-        // Seamless Simulator fallback (if test keys or headless environment)
-        try {
-          await paymentApi.verifyPayment({
-            razorpayOrderId: rzpOrderRes.orderId || `rzp_sim_${Date.now()}`,
-            razorpayPaymentId: `pay_sim_${Date.now()}`,
-            razorpaySignature: "simulated_success_signature",
-            orderId: (dbOrder._id || dbOrder.id || orderNumber) as string,
+        // If native checkout did not open, OPEN the interactive RazorpayModal!
+        if (!openedNative) {
+          setActiveRazorpayData({
+            amount: Math.round(grandTotal),
+            orderNumber,
+            orderId: rzpOrderRes.orderId || `rzp_sim_${Date.now()}`,
+            dbOrderId,
           });
-        } catch {
-          // continue
+          setIsRazorpayModalOpen(true);
         }
-
-        setConfirmedOrderNumber(orderNumber);
-        setOrderComplete(true);
-        setCheckoutStep("cart");
-        clearCart();
       } catch (payErr) {
-        console.warn("Payment flow handled gracefully:", payErr);
-        // Order is still safely captured
-        setConfirmedOrderNumber(orderNumber);
-        setOrderComplete(true);
-        setCheckoutStep("cart");
-        clearCart();
+        console.warn("Payment order creation fallback:", payErr);
+        setActiveRazorpayData({
+          amount: Math.round(grandTotal),
+          orderNumber,
+          orderId: `rzp_sim_${Date.now()}`,
+          dbOrderId,
+        });
+        setIsRazorpayModalOpen(true);
       }
     } catch (e) {
       console.error("Order error:", e);
       showToast("Order could not be processed. Please check details.");
-    } finally {
       setIsCheckingOut(false);
     }
   };
@@ -290,16 +364,16 @@ export default function CartDrawer() {
       >
         {/* Header */}
         <div className="cart-drawer-header">
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <ShoppingBag size={20} color="var(--color-terracotta)" />
-            <h2 className="cart-drawer-title">
-              {checkoutStep === "details" ? "Delivery & Payment" : "Your Soap Bag"}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <ShoppingBag size={21} color="var(--color-terracotta)" />
+            <h2 className="cart-drawer-title" style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+              <span>{checkoutStep === "details" ? "Delivery & Payment" : "Your Soap Bag"}</span>
+              {!orderComplete && cart.length > 0 && checkoutStep === "cart" && (
+                <span style={{ fontSize: "1.15rem", fontWeight: 500, color: "var(--color-dragon-black)", fontFamily: "sans-serif" }}>
+                  {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                </span>
+              )}
             </h2>
-            {!orderComplete && cart.length > 0 && checkoutStep === "cart" && (
-              <span className="cart-drawer-badge">
-                {cart.reduce((sum, item) => sum + item.quantity, 0)}
-              </span>
-            )}
           </div>
           <button
             type="button"
@@ -468,9 +542,25 @@ export default function CartDrawer() {
                   type="text"
                   placeholder="e.g. Priya Sharma"
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
+                  onChange={(e) => {
+                    setCustomerName(e.target.value);
+                    if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem 0.8rem",
+                    borderRadius: "8px",
+                    border: formErrors.name ? "1.5px solid #dc2626" : "1px solid var(--color-border)",
+                    backgroundColor: formErrors.name ? "#fff5f5" : "#ffffff",
+                    fontSize: "0.88rem",
+                    transition: "all 0.15s ease",
+                  }}
                 />
+                {formErrors.name && (
+                  <div style={{ color: "#dc2626", fontSize: "0.74rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>
+                    <AlertCircle size={12} /> {formErrors.name}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
@@ -482,21 +572,55 @@ export default function CartDrawer() {
                     type="email"
                     placeholder="name@example.com"
                     value={customerEmail}
-                    onChange={(e) => setCustomerEmail(e.target.value)}
-                    style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
+                    onChange={(e) => {
+                      setCustomerEmail(e.target.value);
+                      if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: undefined }));
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem 0.8rem",
+                      borderRadius: "8px",
+                      border: formErrors.email ? "1.5px solid #dc2626" : "1px solid var(--color-border)",
+                      backgroundColor: formErrors.email ? "#fff5f5" : "#ffffff",
+                      fontSize: "0.88rem",
+                      transition: "all 0.15s ease",
+                    }}
                   />
+                  {formErrors.email && (
+                    <div style={{ color: "#dc2626", fontSize: "0.72rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>
+                      <AlertCircle size={12} /> {formErrors.email}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.25rem", color: "var(--color-dragon-black)" }}>
-                    Phone Number
+                    Mobile Number (10 Digits) *
                   </label>
                   <input
                     type="tel"
-                    placeholder="+91 98765 43210"
+                    maxLength={10}
+                    placeholder="9876543210"
                     value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      setCustomerPhone(val);
+                      if (formErrors.phone) setFormErrors((prev) => ({ ...prev, phone: undefined }));
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem 0.8rem",
+                      borderRadius: "8px",
+                      border: formErrors.phone ? "1.5px solid #dc2626" : "1px solid var(--color-border)",
+                      backgroundColor: formErrors.phone ? "#fff5f5" : "#ffffff",
+                      fontSize: "0.88rem",
+                      transition: "all 0.15s ease",
+                    }}
                   />
+                  {formErrors.phone && (
+                    <div style={{ color: "#dc2626", fontSize: "0.72rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>
+                      <AlertCircle size={12} /> {formErrors.phone}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -508,9 +632,26 @@ export default function CartDrawer() {
                   rows={2}
                   placeholder="House/Flat #, Building, Street, Landmark"
                   value={shippingAddress}
-                  onChange={(e) => setShippingAddress(e.target.value)}
-                  style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.85rem", resize: "none" }}
+                  onChange={(e) => {
+                    setShippingAddress(e.target.value);
+                    if (formErrors.address) setFormErrors((prev) => ({ ...prev, address: undefined }));
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem 0.8rem",
+                    borderRadius: "8px",
+                    border: formErrors.address ? "1.5px solid #dc2626" : "1px solid var(--color-border)",
+                    backgroundColor: formErrors.address ? "#fff5f5" : "#ffffff",
+                    fontSize: "0.85rem",
+                    resize: "none",
+                    transition: "all 0.15s ease",
+                  }}
                 />
+                {formErrors.address && (
+                  <div style={{ color: "#dc2626", fontSize: "0.74rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>
+                    <AlertCircle size={12} /> {formErrors.address}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
@@ -532,16 +673,33 @@ export default function CartDrawer() {
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.25rem", color: "var(--color-dragon-black)" }}>
-                    PIN Code
+                    PIN Code (6 digits) *
                   </label>
                   <input
                     type="text"
                     maxLength={6}
                     placeholder="400001"
                     value={shippingPincode}
-                    onChange={(e) => setShippingPincode(e.target.value)}
-                    style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      setShippingPincode(val);
+                      if (formErrors.pincode) setFormErrors((prev) => ({ ...prev, pincode: undefined }));
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem 0.8rem",
+                      borderRadius: "8px",
+                      border: formErrors.pincode ? "1.5px solid #dc2626" : "1px solid var(--color-border)",
+                      backgroundColor: formErrors.pincode ? "#fff5f5" : "#ffffff",
+                      fontSize: "0.88rem",
+                      transition: "all 0.15s ease",
+                    }}
                   />
+                  {formErrors.pincode && (
+                    <div style={{ color: "#dc2626", fontSize: "0.72rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>
+                      <AlertCircle size={12} /> {formErrors.pincode}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -623,7 +781,7 @@ export default function CartDrawer() {
 
                 <div className="cart-item-details">
                   <h4 className="cart-item-name">{soap.name}</h4>
-                  <div className="cart-item-tagline">{soap.cureTime}</div>
+                  <div className="cart-item-tagline">{soap.tagline || soap.cureTime || "Scalar Wave Charged"}</div>
 
                   <div className="cart-item-qty-row">
                     <div className="qty-counter">
@@ -677,7 +835,7 @@ export default function CartDrawer() {
                 <form onSubmit={handleApplyPromo} className="promo-input-row">
                   <input
                     type="text"
-                    placeholder="Voucher (e.g. FESTIVE25)"
+                    placeholder="VOUCHER (E.G. FESTIVE25)"
                     className="promo-input"
                     value={inputCode}
                     onChange={(e) => setInputCode(e.target.value)}
@@ -848,6 +1006,24 @@ export default function CartDrawer() {
           </div>
         )}
       </aside>
+
+      {/* Interactive Razorpay Gateway Modal */}
+      {activeRazorpayData && (
+        <RazorpayModal
+          isOpen={isRazorpayModalOpen}
+          amount={activeRazorpayData.amount}
+          orderNumber={activeRazorpayData.orderNumber}
+          razorpayOrderId={activeRazorpayData.orderId}
+          customerName={customerName}
+          customerEmail={customerEmail}
+          customerPhone={customerPhone}
+          onSuccess={(response) => handlePaymentSuccess(response)}
+          onClose={() => {
+            setIsRazorpayModalOpen(false);
+            setIsCheckingOut(false);
+          }}
+        />
+      )}
     </>
   );
 }

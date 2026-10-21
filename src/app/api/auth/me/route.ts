@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
 import { getUserFromRequest } from "@/lib/auth";
 
-
 export async function GET(req: NextRequest) {
+  await connection();
   try {
     const jwtUser = getUserFromRequest(req);
     if (!jwtUser) {
@@ -39,7 +40,10 @@ export async function GET(req: NextRequest) {
         createdAt: user.createdAt,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error && typeof error === "object" && "digest" in error && String(error.digest).startsWith("NEXT_")) {
+      throw error;
+    }
     console.error("Me error:", error);
     return NextResponse.json(
       { success: false, message: "Server error" },

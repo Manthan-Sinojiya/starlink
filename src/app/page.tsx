@@ -6,7 +6,6 @@ import HeroSection from "@/components/HeroSection";
 import CategoryCardsSection from "@/components/CategoryCardsSection";
 import BestSellerSection from "@/components/BestSellerSection";
 import FestivalOfferSection from "@/components/FestivalOfferSection";
-import SecondaryOfferSection from "@/components/SecondaryOfferSection";
 import SoapRitualSection from "@/components/SoapRitualSection";
 import AllSoapsSection from "@/components/AllSoapsSection";
 import CustomerReviewsSection from "@/components/CustomerReviewsSection";
@@ -40,11 +39,8 @@ export default function HomePage() {
           {/* 3. Best Sellers Section - Exactly 4 Cards in 1 Row */}
           <BestSellerSection />
 
-          {/* 4. Festival Offer Section with Live Countdown & Box Inspector */}
+          {/* 4. Unified Festival & Secondary Offers Slider Showcase */}
           <FestivalOfferSection />
-
-          {/* 4b. Secondary Promotional Curation Section */}
-          <SecondaryOfferSection />
 
           {/* 5. The Soap Ritual & Cold Process Philosophy */}
           <SoapRitualSection />

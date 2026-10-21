@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Razorpay from "razorpay";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rateLimit";
 
 function getRazorpayInstance() {
   const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
@@ -26,6 +27,10 @@ function getRazorpayInstance() {
 
 // Create Razorpay payment order
 export async function POST(req: NextRequest) {
+  // Prevent payment abuse / order spam (max 15/min per IP)
+  const rl = checkRateLimit(req, { limit: 15, windowMs: 60_000, prefix: "payment-create" });
+  if (!rl.success) return rateLimitResponse(rl);
+
   try {
     const { amount, currency = "INR", receipt, notes } = await req.json();
 

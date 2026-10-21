@@ -124,17 +124,19 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                     style={{
                       position: "absolute",
                       top: "calc(100% + 6px)",
-                      left: "-80px",
-                      width: "560px",
+                      left: "-120px",
+                      width: "680px",
+                      maxWidth: "calc(100vw - 32px)",
                       background: "rgba(255, 255, 255, 0.98)",
                       backdropFilter: "blur(16px)",
                       borderRadius: "16px",
                       boxShadow: "0 22px 50px rgba(17, 17, 19, 0.16), 0 4px 16px rgba(225, 113, 89, 0.08)",
                       border: "1px solid var(--color-border)",
-                      padding: "1rem 1.15rem 0.85rem",
+                      padding: "1.1rem 1.35rem 0.95rem",
                       zIndex: 100,
                       maxHeight: "78vh",
                       overflowY: "auto",
+                      overflowX: "hidden",
                     }}
                   >
                     {/* Header bar */}
@@ -182,8 +184,9 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "0.4rem 0.75rem",
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        gap: "0.45rem 1rem",
+                        width: "100%",
                       }}
                     >
                       {categories
@@ -203,11 +206,14 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                               style={{
                                 display: "flex",
                                 flexDirection: "column",
-                                padding: "0.55rem 0.75rem",
+                                padding: "0.55rem 0.85rem",
                                 borderRadius: "10px",
                                 borderLeft: "2px solid transparent",
                                 background: "transparent",
                                 transition: "all 0.16s ease",
+                                minWidth: 0,
+                                width: "100%",
+                                boxSizing: "border-box",
                               }}
                               onMouseEnter={(e) => {
                                 e.currentTarget.style.backgroundColor = "var(--color-cream-subtle)";
@@ -230,6 +236,9 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                                     fontSize: "0.85rem",
                                     fontWeight: 700,
                                     color: "var(--color-dragon-black)",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
                                   }}
                                 >
                                   {cat.name}
@@ -243,6 +252,8 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
                                       background: "var(--color-terracotta-subtle)",
                                       padding: "1px 6px",
                                       borderRadius: "9999px",
+                                      flexShrink: 0,
+                                      marginLeft: "8px",
                                     }}
                                   >
                                     {count}

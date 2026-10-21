@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
 import { signToken } from "@/lib/auth";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rateLimit";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: NextRequest) {
+  // Prevent registration spam (max 5 per min per IP)
+  const rl = checkRateLimit(req, { limit: 5, windowMs: 60_000, prefix: "auth-register" });
+  if (!rl.success) return rateLimitResponse(rl);
+
   try {
     await dbConnect();
     const body = await req.json();
@@ -16,9 +23,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (password.length < 6) {
+    const trimmedEmail = email.toLowerCase().trim();
+    if (!EMAIL_REGEX.test(trimmedEmail) || trimmedEmail.length > 100) {
       return NextResponse.json(
-        { success: false, message: "Password must be at least 6 characters." },
+        { success: false, message: "Please provide a valid email address." },
+        { status: 400 }
+      );
+    }
+
+    if (typeof password !== "string" || password.length < 6 || password.length > 128) {
+      return NextResponse.json(
+        { success: false, message: "Password must be between 6 and 128 characters." },
         { status: 400 }
       );
     }

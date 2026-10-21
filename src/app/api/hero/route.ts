@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import HeroSection from "@/models/HeroSection";
 import { requireAdmin } from "@/lib/auth";
 
-
 // GET hero section (public)
 export async function GET() {
+  await connection();
   try {
     await dbConnect();
     let hero = await HeroSection.findOne({}).lean();
@@ -19,7 +20,10 @@ export async function GET() {
     }
 
     return NextResponse.json({ success: true, slides: hero.slides });
-  } catch (error) {
+  } catch (error: any) {
+    if (error && typeof error === "object" && "digest" in error && String(error.digest).startsWith("NEXT_")) {
+      throw error;
+    }
     console.error("Get hero error:", error);
     return NextResponse.json({ success: false, message: "Failed to fetch hero section" }, { status: 500 });
   }
