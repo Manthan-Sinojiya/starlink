@@ -4,9 +4,12 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { X, MessageCircle, Send, CheckCircle2, User, Phone, Mail, Sparkles, AlertCircle } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useDBStore } from "@/context/DBStoreContext";
 
 export default function WhatsAppEnquiryModal() {
   const { enquirySoap, setEnquirySoap, showToast } = useCart();
+  const { siteSettings } = useDBStore();
+
 
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -74,8 +77,8 @@ export default function WhatsAppEnquiryModal() {
     ].filter(Boolean);
 
     const fullMessage = textLines.join("\n");
-    // Standard WhatsApp merchant contact number
-    const merchantPhone = "919876543210";
+    // Dynamic WhatsApp merchant contact number configured by admin
+    const merchantPhone = (siteSettings?.whatsappNumber || "919876543210").replace(/\D/g, "");
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${merchantPhone}&text=${encodeURIComponent(
       fullMessage
     )}`;

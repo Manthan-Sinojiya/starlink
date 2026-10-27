@@ -4,22 +4,26 @@ import dbConnect from "@/lib/dbConnect";
 import Order from "@/models/Order";
 import { getUserFromRequest, requireAdmin } from "@/lib/auth";
 
+import mongoose from "mongoose";
+
 // GET single order
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await connection();
   try {
-    const jwtUser = getUserFromRequest(req);
-    if (!jwtUser) return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 });
-
     await dbConnect();
     const { id } = await params;
-    const order = await Order.findById(id).lean();
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { orderNumber: id };
+    const order = await Order.findOne(query).lean();
 
     if (!order) return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 });
 
-    // Customers can only see their own orders
-    if (jwtUser.role !== "admin" && order.customerEmail !== jwtUser.email) {
-      return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 });
+    const jwtUser = getUserFromRequest(req);
+    // If not matching exact orderNumber query, verify user authentication
+    if (!id.startsWith("SLC-")) {
+      if (!jwtUser) return NextResponse.json({ success: false, message: "Authentication required" }, { status: 401 });
+      if (jwtUser.role !== "admin" && order.customerEmail !== jwtUser.email) {
+        return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 });
+      }
     }
 
     return NextResponse.json({ success: true, order });
@@ -28,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       throw error;
     }
     console.error("Get order error:", error);
-    return NextResponse.json({ success: false, message: "Server error" }, { status: 500 });
+    return NextResponse.json({ success: false, message: error?.message || "Server error" }, { status: 500 });
   }
 }
 
@@ -42,12 +46,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const body = await req.json();
 
-    const updated = await Order.findByIdAndUpdate(id, body, { new: true }).lean();
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { orderNumber: id };
+    const updated = await Order.findOneAndUpdate(query, body, { new: true }).lean();
     if (!updated) return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 });
 
     return NextResponse.json({ success: true, order: updated });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Update order error:", error);
-    return NextResponse.json({ success: false, message: "Server error" }, { status: 500 });
+    return NextResponse.json({ success: false, message: error?.message || "Server error" }, { status: 500 });
   }
 }

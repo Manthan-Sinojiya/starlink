@@ -76,9 +76,9 @@ export default function RazorpayModal({
 
     setTimeout(() => {
       setIsProcessing(false);
-      const paymentId = `pay_${Date.now().toString().slice(-8)}${Math.floor(100 + Math.random() * 900)}`;
+      const paymentId = `pay_sim_${Date.now().toString().slice(-8)}${Math.floor(100 + Math.random() * 900)}`;
       onSuccess({
-        razorpay_order_id: razorpayOrderId || `order_${orderNumber}`,
+        razorpay_order_id: razorpayOrderId || `rzp_sim_${orderNumber}`,
         razorpay_payment_id: paymentId,
         razorpay_signature: `sig_${Date.now()}_valid`,
       });

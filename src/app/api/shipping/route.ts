@@ -4,6 +4,8 @@ import dbConnect from "@/lib/dbConnect";
 import ShippingSettings from "@/models/ShippingSettings";
 import { requireAdmin } from "@/lib/auth";
 
+import { DEFAULT_SHIPPING_SETTINGS } from "@/data/soaps";
+
 export async function GET() {
   await connection();
   try {
@@ -12,13 +14,19 @@ export async function GET() {
 
     if (!settings) {
       settings = await ShippingSettings.create({
-        shippingType: "flat",
+        shippingType: "state_wise",
         flatRate: 99,
         freeShippingThreshold: 999,
         enableFreeThreshold: true,
         defaultStateRate: 99,
-        stateRates: {},
+        stateRates: DEFAULT_SHIPPING_SETTINGS.stateRates,
       });
+    } else if (!settings.stateRates || Object.keys(settings.stateRates).length === 0) {
+      settings = await ShippingSettings.findOneAndUpdate(
+        {},
+        { stateRates: DEFAULT_SHIPPING_SETTINGS.stateRates },
+        { new: true }
+      ).lean();
     }
 
     return NextResponse.json({ success: true, settings });

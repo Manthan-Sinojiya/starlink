@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
@@ -10,7 +11,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     await dbConnect();
     const { id } = await params;
-    const category = await Category.findById(id).lean();
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { slug: id };
+    const category = await Category.findOne(query).lean();
     if (!category) return NextResponse.json({ success: false, message: "Category not found" }, { status: 404 });
     return NextResponse.json({ success: true, category });
   } catch (error: any) {
@@ -31,13 +33,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const body = await req.json();
 
-    const updated = await Category.findByIdAndUpdate(id, body, { new: true }).lean();
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { slug: id };
+    const updated = await Category.findOneAndUpdate(query, body, { new: true }).lean();
     if (!updated) return NextResponse.json({ success: false, message: "Category not found" }, { status: 404 });
 
     return NextResponse.json({ success: true, category: updated });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Update category error:", error);
-    return NextResponse.json({ success: false, message: "Failed to update category" }, { status: 500 });
+    return NextResponse.json({ success: false, message: error?.message || "Failed to update category" }, { status: 500 });
   }
 }
 
@@ -48,7 +51,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     await dbConnect();
     const { id } = await params;
-    const category = await Category.findByIdAndDelete(id);
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { slug: id };
+    const category = await Category.findOneAndDelete(query);
 
     if (!category) return NextResponse.json({ success: false, message: "Category not found" }, { status: 404 });
 
@@ -57,8 +61,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
 
     return NextResponse.json({ success: true, message: "Category deleted" });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Delete category error:", error);
-    return NextResponse.json({ success: false, message: "Failed to delete category" }, { status: 500 });
+    return NextResponse.json({ success: false, message: error?.message || "Failed to delete category" }, { status: 500 });
   }
 }

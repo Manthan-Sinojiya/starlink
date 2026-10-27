@@ -1,6 +1,7 @@
 "use client";
 
 import { useDBStore } from "@/context/DBStoreContext";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 
 export default function SeoStructuredData() {
   const { products, isLoaded } = useDBStore();
@@ -10,7 +11,7 @@ export default function SeoStructuredData() {
     "@type": "Organization",
     name: "Star Light Co.",
     url: "https://starlightsoaps.com",
-    logo: "https://starlightsoaps.com/images/logo.png",
+    logo: CLOUDINARY_IMAGES.logo,
     description: "Luxury handcrafted cold-process artisanal soaps infused with sacred Dragon's Blood resin and pure botanicals.",
     sameAs: [
       "https://x.com/starlightsoaps",
@@ -30,7 +31,7 @@ export default function SeoStructuredData() {
         "@type": "Product",
         name: soap.name,
         description: soap.description,
-        image: `https://starlightsoaps.com${soap.image}`,
+        image: soap.image?.startsWith("http") ? soap.image : `https://starlightsoaps.com${soap.image}`,
         offers: {
           "@type": "Offer",
           priceCurrency: "INR",

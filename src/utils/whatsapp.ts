@@ -1,6 +1,7 @@
 export function openWhatsAppDirect(
   soap?: { id?: string; name: string; price?: number } | null,
-  customMsg?: string
+  customMsg?: string,
+  overridePhone?: string
 ) {
   const origin = typeof window !== "undefined" ? window.location.origin : "https://starlightsoaps.com";
   let message = "";
@@ -13,6 +14,12 @@ export function openWhatsAppDirect(
   } else {
     message = "Hello Star Light Co.! I would like to enquire about your luxury artisanal soaps.";
   }
+
+  let phone = overridePhone;
+  if (!phone && typeof window !== "undefined") {
+    phone = localStorage.getItem("starlight_whatsapp_number") || "919876543210";
+  }
+  const cleanPhone = (phone || "919876543210").replace(/\D/g, "");
   const text = encodeURIComponent(message);
-  window.open(`https://wa.me/919876543210?text=${text}`, "_blank");
+  window.open(`https://wa.me/${cleanPhone}?text=${text}`, "_blank");
 }

@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import Product from "@/models/Product";
 import { requireAdmin } from "@/lib/auth";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rateLimit";
 
 // GET all products (public)
@@ -86,15 +87,23 @@ export async function POST(req: NextRequest) {
 
     const product = await Product.create({
       ...body,
+      name: rawName,
       slug: finalSlug,
       weight: weightDisplay,
+      mainCategory: (body.mainCategory || "Face & Gentle Cleansing").trim(),
+      description: (body.description || "").trim() || "Artisanal cold-process botanical bar crafted with pure therapeutic botanicals, cold-pressed plant oils, and mineral-rich clays.",
+      image: body.image || CLOUDINARY_IMAGES.dragonsBlood,
+      price: typeof body.price === "number" && body.price >= 0 ? body.price : (Number(body.price) || 499),
+      inStock: body.inStock !== false,
+      rating: body.rating || 5.0,
+      reviewsCount: body.reviewsCount || 0,
     });
 
     return NextResponse.json({ success: true, product }, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Create product error:", error);
     return NextResponse.json(
-      { success: false, message: "Failed to create product" },
+      { success: false, message: error?.message || "Failed to create product" },
       { status: 500 }
     );
   }

@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import Category from "@/models/Category";
 import { requireAdmin } from "@/lib/auth";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 
 // GET all categories (public)
 export async function GET() {
@@ -37,13 +38,20 @@ export async function POST(req: NextRequest) {
     const count = await Category.countDocuments();
     const category = await Category.create({
       ...body,
+      name: rawName,
       slug: finalSlug,
+      image: body.image || CLOUDINARY_IMAGES.dragonsBlood,
+      description: (body.description || "").trim() || `${rawName} handcrafted cold-process soaps.`,
+      badge: body.badge || "Signature",
       order: body.order ?? count,
     });
 
     return NextResponse.json({ success: true, category }, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Create category error:", error);
-    return NextResponse.json({ success: false, message: "Failed to create category" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: error?.message || "Failed to create category" },
+      { status: 500 }
+    );
   }
 }

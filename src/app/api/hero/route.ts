@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import HeroSection from "@/models/HeroSection";
 import { requireAdmin } from "@/lib/auth";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 
 // GET hero section (public)
 export async function GET() {
@@ -59,7 +60,7 @@ function getDefaultSlides() {
       headline: "Dragon's Blood\nArtisanal Soap",
       subheadline: "Sacred Dragon's Blood Resin · Himalayan Pink Salt",
       description: "Cold-processed with rare Dragon's Blood resin and Himalayan pink salt. A velvety ritual for radiant skin.",
-      image: "/images/products/dragons-blood.jpg",
+      image: CLOUDINARY_IMAGES.dragonsBlood,
       imageAlt: "Dragon's Blood artisanal cold-process soap bar by Star Light Co.",
       ctaText: "Shop Dragon's Blood",
       ctaLink: "/#all-soaps",
@@ -72,7 +73,7 @@ function getDefaultSlides() {
       headline: "Kashmiri Saffron\n& Wild Honey",
       subheadline: "Kashmiri Saffron · Wild Forest Honey · Goat Milk",
       description: "A luxurious golden bar infused with the world's finest saffron for a radiant, luminous complexion.",
-      image: "/images/products/saffron-honey.jpg",
+      image: CLOUDINARY_IMAGES.saffronHoney,
       imageAlt: "Kashmiri Saffron and Honey artisanal soap bar by Star Light Co.",
       ctaText: "Discover Saffron Bar",
       ctaLink: "/#all-soaps",
@@ -85,7 +86,7 @@ function getDefaultSlides() {
       headline: "Damask Rose\nFrench Pink Clay",
       subheadline: "Bulgarian Rose Otto · French Pink Clay · Argan Oil",
       description: "Rosa damascena petals meet French pink clay in a velvet-lather bar for delicate, luminous skin.",
-      image: "/images/products/damask-rose.jpg",
+      image: CLOUDINARY_IMAGES.damaskRose,
       imageAlt: "Damask Rose and French Pink Clay artisanal soap bar by Star Light Co.",
       ctaText: "Explore Rose Collection",
       ctaLink: "/#all-soaps",

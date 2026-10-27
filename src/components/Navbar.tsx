@@ -3,19 +3,23 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Search, ShoppingBag, Menu, X, Sparkles, ChevronDown, User } from "lucide-react";
+import { Search, ShoppingBag, Menu, X, Sparkles, ChevronDown, User, MapPin } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useDBStore } from "@/context/DBStoreContext";
 import { FESTIVAL_PROMO, Soap } from "@/data/soaps";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
+import LocationPickerModal from "./LocationPickerModal";
 
 interface NavbarProps {
   onSearchChange?: (query: string) => void;
 }
 
 export default function Navbar({ onSearchChange }: NavbarProps) {
-  const { cartCount, setIsCartOpen, setQuickViewSoap } = useCart();
-  const { products, categories, currentUser } = useDBStore();
+  const { cartCount, setIsCartOpen, setQuickViewSoap, selectedState } = useCart();
+  const { products, categories, currentUser, userLocation } = useDBStore();
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
@@ -61,17 +65,45 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
 
   return (
     <>
-      {/* Top Festival Announcement Bar with Indian Rupee threshold */}
+      {/* Top Festival Announcement Bar with Indian Rupee threshold & Location Picker */}
       <div className="announcement-bar" role="region" aria-label="Special Offers">
-        <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-          <span>
-            <Sparkles size={14} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px", color: "var(--color-terracotta)" }} />
-            GRAND FESTIVE CELEBRATION: CODE <strong style={{ letterSpacing: "0.08em" }}>{FESTIVAL_PROMO.code}</strong> FOR 25% OFF
-          </span>
-          <span className="badge-pill">LIMITED TIME</span>
-          <span>FREE KEEPSAKE BOX ON ORDERS ₹1,499+</span>
+        <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", margin: "0 auto" }}>
+            <span>
+              <Sparkles size={14} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px", color: "var(--color-terracotta)" }} />
+              GRAND FESTIVE CELEBRATION: CODE <strong style={{ letterSpacing: "0.08em" }}>{FESTIVAL_PROMO.code}</strong> FOR 25% OFF
+            </span>
+            <span className="badge-pill">LIMITED TIME</span>
+            <span>FREE KEEPSAKE BOX ON ORDERS ₹1,499+</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsLocationModalOpen(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              background: "rgba(255, 255, 255, 0.15)",
+              border: "1px solid rgba(255, 255, 255, 0.3)",
+              borderRadius: "999px",
+              padding: "0.2rem 0.65rem",
+              color: "#ffffff",
+              fontSize: "0.73rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "background 0.15s ease",
+            }}
+            title="Click to pick delivery state or auto-detect location"
+            aria-label="Delivery location selector"
+          >
+            <MapPin size={12} style={{ color: "#ffd2c7" }} />
+            <span>Delivering to: <strong style={{ textDecoration: "underline", textUnderlineOffset: "2px" }}>{userLocation.city ? `${userLocation.city}, ` : ""}{selectedState || userLocation.state}</strong></span>
+            <ChevronDown size={11} />
+          </button>
         </div>
       </div>
+
 
       {/* Main Sticky Header with Modern Logo UI */}
       <header className={`site-header ${isScrolled ? "scrolled" : ""}`}>
@@ -81,7 +113,7 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
             <Link href="/" className="brand-logo-link" aria-label="Star Light Co. Home">
               <div className="brand-dragon-crest">
                 <Image
-                  src="/images/logo.png"
+                  src={CLOUDINARY_IMAGES.logo}
                   alt="Star Light Co. Dragon Crest"
                   width={52}
                   height={52}
@@ -522,6 +554,13 @@ export default function Navbar({ onSearchChange }: NavbarProps) {
           }
         }
       `}</style>
+
+      {/* Live Location Picker Modal */}
+      <LocationPickerModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+      />
     </>
+
   );
 }

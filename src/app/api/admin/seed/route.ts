@@ -7,6 +7,7 @@ import Product from "@/models/Product";
 import HeroSection from "@/models/HeroSection";
 import ShippingSettings from "@/models/ShippingSettings";
 import { SOAPS, CATEGORIES_DATA, DEFAULT_SHIPPING_SETTINGS } from "@/data/soaps";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 import { requireAdmin } from "@/lib/auth";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rateLimit";
 
@@ -23,7 +24,13 @@ export async function GET(req: NextRequest) {
     const force = searchParams.get("force") === "true";
     const secret = searchParams.get("secret");
 
-    // Require admin token or valid secret query key/header for ANY seed or wipe execution
+    await dbConnect();
+
+    // Check if system already has an admin user or products
+    const adminCount = await User.countDocuments({ role: "admin" });
+    const isInitialSetup = adminCount === 0;
+
+    // Require admin token or valid secret query key/header if already initialized
     const admin = requireAdmin(req);
     const validSeedSecret = process.env.ADMIN_SEED_SECRET || process.env.ADMIN_PASSWORD;
     const headerSecret = req.headers.get("x-seed-secret");
@@ -31,7 +38,7 @@ export async function GET(req: NextRequest) {
       Boolean(validSeedSecret) &&
       (secret === validSeedSecret || headerSecret === validSeedSecret);
 
-    if (!admin && !isAuthorizedSecret) {
+    if (!isInitialSetup && !admin && !isAuthorizedSecret) {
       return NextResponse.json(
         {
           success: false,
@@ -40,8 +47,6 @@ export async function GET(req: NextRequest) {
         { status: 403 }
       );
     }
-
-    await dbConnect();
 
     // 1. Seed admin user
     const adminEmail = process.env.ADMIN_EMAIL || "admin@starlight.com";
@@ -72,7 +77,7 @@ export async function GET(req: NextRequest) {
         name: c.name,
         slug: c.slug || c.id.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
         description: c.description,
-        image: c.image || "/images/products/dragons-blood.jpg",
+        image: c.image || CLOUDINARY_IMAGES.dragonsBlood,
         imageAlt: `${c.name} artisanal category`,
         badge: c.badge || "Signature",
         subcategories: c.subcategories || [],
@@ -146,7 +151,7 @@ export async function GET(req: NextRequest) {
             headline: "Dragon's Blood\nArtisanal Soap",
             subheadline: "Sacred Dragon's Blood Resin · Himalayan Pink Salt",
             description: "Cold-processed with rare Dragon's Blood resin and Himalayan pink salt. A velvety ritual for radiant skin.",
-            image: "/images/products/dragons-blood.jpg",
+            image: CLOUDINARY_IMAGES.dragonsBlood,
             imageAlt: "Dragon's Blood artisanal cold-process soap bar by Star Light Co.",
             ctaText: "Shop Dragon's Blood",
             ctaLink: "/#all-soaps",
@@ -159,7 +164,7 @@ export async function GET(req: NextRequest) {
             headline: "Kashmiri Saffron\n& Wild Honey",
             subheadline: "Kashmiri Saffron · Wild Forest Honey · Goat Milk",
             description: "A luxurious golden bar infused with the world's finest saffron for a radiant, luminous complexion.",
-            image: "/images/products/saffron-honey.jpg",
+            image: CLOUDINARY_IMAGES.saffronHoney,
             imageAlt: "Kashmiri Saffron and Honey artisanal soap bar by Star Light Co.",
             ctaText: "Discover Saffron Bar",
             ctaLink: "/#all-soaps",
@@ -172,7 +177,7 @@ export async function GET(req: NextRequest) {
             headline: "Damask Rose\nFrench Pink Clay",
             subheadline: "Bulgarian Rose Otto · French Pink Clay · Argan Oil",
             description: "Rosa damascena petals meet French pink clay in a velvet-lather bar for delicate, luminous skin.",
-            image: "/images/products/damask-rose.jpg",
+            image: CLOUDINARY_IMAGES.damaskRose,
             imageAlt: "Damask Rose and French Pink Clay artisanal soap bar by Star Light Co.",
             ctaText: "Explore Rose Collection",
             ctaLink: "/#all-soaps",

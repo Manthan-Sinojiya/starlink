@@ -118,13 +118,18 @@ export default function ImageUpload({
             <div style={{ position: "relative", width: "100%", height: "160px" }}>
               <Image
                 src={preview}
-                alt={altText || imageAlt || label}
+                alt={altText || imageAlt || label || "Product Image"}
                 fill
                 style={{ objectFit: "contain", borderRadius: "8px" }}
                 sizes="300px"
               />
             </div>
-            <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>
+            {(imageAlt || altText) && (
+              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--color-dragon-black)", textAlign: "center" }}>
+                🏷️ {imageAlt || altText}
+              </div>
+            )}
+            <span style={{ fontSize: "0.76rem", color: "var(--color-text-secondary)" }}>
               Click or drag to replace image
             </span>
           </>
@@ -133,7 +138,7 @@ export default function ImageUpload({
             <Upload size={28} color="var(--color-text-tertiary)" />
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--color-dragon-black)" }}>
-                Click to upload or drag & drop
+                {imageAlt ? `Upload Image for ${imageAlt}` : "Click to upload or drag & drop"}
               </div>
               <div style={{ fontSize: "0.76rem", color: "var(--color-text-secondary)", marginTop: "4px" }}>
                 JPEG, PNG, WebP, GIF up to 5MB

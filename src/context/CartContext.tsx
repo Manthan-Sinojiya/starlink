@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Soap, FESTIVAL_PROMO } from "@/data/soaps";
+import { Soap, FESTIVAL_PROMO, DEFAULT_PRIMARY_OFFER, DEFAULT_SECONDARY_OFFER } from "@/data/soaps";
 
 export interface CartItem {
   soap: Soap;
@@ -45,7 +45,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
-  const [appliedPromo, setAppliedPromo] = useState<string | null>("FESTIVE25");
+  const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [quickViewSoap, setQuickViewSoap] = useState<Soap | null>(null);
@@ -85,6 +85,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       // ignore
     }
   }, [wishlist]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("starlight_selected_state", selectedState);
+    } catch {
+      // ignore
+    }
+  }, [selectedState]);
+
 
   const showToast = (message: string) => {
     setToast(message);
@@ -143,15 +152,73 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const isInWishlist = (soapId: string) => wishlist.includes(soapId);
 
+  const getOffersData = () => {
+    let primary = DEFAULT_PRIMARY_OFFER;
+    let secondary = DEFAULT_SECONDARY_OFFER;
+    if (typeof window !== "undefined") {
+      try {
+        const p = localStorage.getItem("starlight_primary_offer");
+        if (p) primary = { ...primary, ...JSON.parse(p) };
+        const s = localStorage.getItem("starlight_secondary_offer");
+        if (s) secondary = { ...secondary, ...JSON.parse(s) };
+      } catch {}
+    }
+    return { primary, secondary };
+  };
+
   const applyPromo = (code: string) => {
     const clean = code.trim().toUpperCase();
-    if (clean === FESTIVAL_PROMO.code) {
+    const { primary, secondary } = getOffersData();
+    const primaryCode = (primary.promoCode || "FESTIVE25").toUpperCase();
+    const secondaryCode = (secondary.promoCode || "AYUR20").toUpperCase();
+
+    if (clean === primaryCode) {
+      const hasQualifyingItem = cart.some((item) => {
+        if (primary.productId) {
+          return item.soap.id === primary.productId || item.soap.id === primary.id;
+        }
+        return (
+          item.soap.id === primary.id ||
+          item.soap.isFestive ||
+          item.soap.category === "festive" ||
+          item.soap.name.toLowerCase().includes("vault") ||
+          item.soap.name.toLowerCase().includes("grand festival")
+        );
+      });
+      if (!hasQualifyingItem) {
+        setPromoError(`Code ${clean} is only valid for "${primary.title}". Add it to your cart to claim this discount.`);
+        return false;
+      }
       setAppliedPromo(clean);
       setPromoError(null);
-      showToast(`Promo "${clean}" applied! 25% Off 🎁`);
+      showToast(`Promo "${clean}" applied! ${primary.discountPercent || 25}% off "${primary.title}" 🎁`);
+      return true;
+    } else if (clean === secondaryCode) {
+      const hasQualifyingItem = cart.some((item) => {
+        if (secondary.productId) {
+          return item.soap.id === secondary.productId || item.soap.id === secondary.id;
+        }
+        return (
+          item.soap.id === secondary.id ||
+          item.soap.name.toLowerCase().includes("ayurvedic") ||
+          item.soap.name.toLowerCase().includes("saffron")
+        );
+      });
+      if (!hasQualifyingItem) {
+        setPromoError(`Code ${clean} is only valid for "${secondary.title}". Add it to your cart to claim this discount.`);
+        return false;
+      }
+      setAppliedPromo(clean);
+      setPromoError(null);
+      showToast(`Promo "${clean}" applied! ${secondary.discountPercent || 20}% off "${secondary.title}" ✨`);
+      return true;
+    } else if (clean === "STARLIGHT10") {
+      setAppliedPromo(clean);
+      setPromoError(null);
+      showToast(`Promo "${clean}" applied! 10% Off Storewide ✨`);
       return true;
     } else {
-      setPromoError("Invalid promo code. Try FESTIVE25 for 25% off!");
+      setPromoError(`Invalid promo code. Valid vouchers: ${primaryCode} or ${secondaryCode}!`);
       return false;
     }
   };
@@ -178,8 +245,47 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const hasExclusiveTax = cart.some((item) => item.soap.taxType === "exclusive");
 
-  const discountPercent = appliedPromo === FESTIVAL_PROMO.code ? 0.25 : 0;
-  const discountAmount = subtotal * discountPercent;
+  // Specific offer coupon calculation: ONLY discounts qualifying items, not other items!
+  const { primary, secondary } = getOffersData();
+  const primaryCode = (primary.promoCode || "FESTIVE25").toUpperCase();
+  const secondaryCode = (secondary.promoCode || "AYUR20").toUpperCase();
+
+  let discountAmount = 0;
+  if (appliedPromo === primaryCode) {
+    const qualifyingSubtotal = cart
+      .filter((item) => {
+        if (primary.productId) {
+          return item.soap.id === primary.productId || item.soap.id === primary.id;
+        }
+        return (
+          item.soap.id === primary.id ||
+          item.soap.isFestive ||
+          item.soap.category === "festive" ||
+          item.soap.name.toLowerCase().includes("vault") ||
+          item.soap.name.toLowerCase().includes("grand festival")
+        );
+      })
+      .reduce((acc, item) => acc + item.soap.price * item.quantity, 0);
+    const pct = (primary.discountPercent || 25) / 100;
+    discountAmount = Math.round(qualifyingSubtotal * pct);
+  } else if (appliedPromo === secondaryCode) {
+    const qualifyingSubtotal = cart
+      .filter((item) => {
+        if (secondary.productId) {
+          return item.soap.id === secondary.productId || item.soap.id === secondary.id;
+        }
+        return (
+          item.soap.id === secondary.id ||
+          item.soap.name.toLowerCase().includes("ayurvedic") ||
+          item.soap.name.toLowerCase().includes("saffron")
+        );
+      })
+      .reduce((acc, item) => acc + item.soap.price * item.quantity, 0);
+    const pct = (secondary.discountPercent || 20) / 100;
+    discountAmount = Math.round(qualifyingSubtotal * pct);
+  } else if (appliedPromo === "STARLIGHT10") {
+    discountAmount = Math.round(subtotal * 0.1);
+  }
   const total = Math.max(0, subtotal - discountAmount + taxAmount);
 
   const freeShippingProgress = Math.min(

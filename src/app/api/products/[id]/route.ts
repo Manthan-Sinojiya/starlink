@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import dbConnect from "@/lib/dbConnect";
@@ -15,9 +16,8 @@ export async function GET(
     await dbConnect();
     const { id } = await params;
 
-    const product = await Product.findOne({
-      $or: [{ slug: id }, { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }],
-    }).lean();
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { slug: id };
+    const product = await Product.findOne(query).lean();
 
     if (!product) {
       return NextResponse.json(
@@ -66,8 +66,9 @@ export async function PUT(
       }
     }
 
-    const updated = await Product.findByIdAndUpdate(
-      id,
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { slug: id };
+    const updated = await Product.findOneAndUpdate(
+      query,
       { ...body, weight: weightDisplay },
       { new: true }
     ).lean();
@@ -80,10 +81,10 @@ export async function PUT(
     }
 
     return NextResponse.json({ success: true, product: updated });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Update product error:", error);
     return NextResponse.json(
-      { success: false, message: "Failed to update product" },
+      { success: false, message: error?.message || "Failed to update product" },
       { status: 500 }
     );
   }
@@ -105,7 +106,8 @@ export async function DELETE(
 
     await dbConnect();
     const { id } = await params;
-    const product = await Product.findByIdAndDelete(id);
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { slug: id };
+    const product = await Product.findOneAndDelete(query);
 
     if (!product) {
       return NextResponse.json(
@@ -124,10 +126,10 @@ export async function DELETE(
     }
 
     return NextResponse.json({ success: true, message: "Product deleted successfully" });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Delete product error:", error);
     return NextResponse.json(
-      { success: false, message: "Failed to delete product" },
+      { success: false, message: error?.message || "Failed to delete product" },
       { status: 500 }
     );
   }

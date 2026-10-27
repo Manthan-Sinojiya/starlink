@@ -19,26 +19,62 @@ import {
   ChevronLeft,
   ChevronRight,
   Layers,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { FESTIVAL_PROMO, Soap } from "@/data/soaps";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 import { useCart } from "@/context/CartContext";
 import { useDBStore } from "@/context/DBStoreContext";
 import { openWhatsAppDirect } from "@/utils/whatsapp";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 export default function FestivalOfferSection() {
-  const { addToCart, showToast } = useCart();
+  const { cart, addToCart, updateQuantity, showToast } = useCart();
   const { primaryOffer, secondaryOffer } = useDBStore();
 
+  const isPrimaryActive = Boolean(primaryOffer?.isActive);
+  const isSecondaryActive = Boolean(secondaryOffer?.isActive);
+
   // Active top-level offer tab: 0 = Primary (Festival Vault), 1 = Secondary (Ayurvedic Saffron)
-  const [activeOfferIndex, setActiveOfferIndex] = useState<0 | 1>(0);
+  const [activeOfferIndex, setActiveOfferIndex] = useState<0 | 1>(() => {
+    if (!isPrimaryActive && isSecondaryActive) return 1;
+    return 0;
+  });
+
+  // Keep activeOfferIndex synchronized if an offer is deactivated/activated by admin
+  useEffect(() => {
+    if (!isPrimaryActive && isSecondaryActive) {
+      setActiveOfferIndex(1);
+    } else if (isPrimaryActive && !isSecondaryActive) {
+      setActiveOfferIndex(0);
+    }
+  }, [isPrimaryActive, isSecondaryActive]);
 
   // Per-offer internal carousel states
   const [primarySelectedView, setPrimarySelectedView] = useState<"box" | number>("box");
   const [secondarySelectedView, setSecondarySelectedView] = useState<"box" | number>("box");
 
+  // Quantity to add
+  const [primaryQty, setPrimaryQty] = useState(1);
+  const [secondaryQty, setSecondaryQty] = useState(1);
+
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [addedOffer, setAddedOffer] = useState<string | null>(null);
+  const [isPrimaryHovered, setIsPrimaryHovered] = useState(false);
+  const [isSectionHovered, setIsSectionHovered] = useState(false);
+
+  // Auto-switch between Offer 01 and Offer 02 automatically every 7 seconds (only if BOTH are active)
+  useEffect(() => {
+    if (isSectionHovered) return;
+    if (!isPrimaryActive || !isSecondaryActive) return;
+
+    const timer = setInterval(() => {
+      setActiveOfferIndex((prev) => (prev === 0 ? 1 : 0));
+    }, 7000);
+
+    return () => clearInterval(timer);
+  }, [isSectionHovered, isPrimaryActive, isSecondaryActive]);
 
   // Live countdown timers
   const [primaryTimeLeft, setPrimaryTimeLeft] = useState({
@@ -76,7 +112,21 @@ export default function FestivalOfferSection() {
     return () => clearInterval(timer);
   }, []);
 
-  if (!primaryOffer?.isActive && !secondaryOffer?.isActive) return null;
+  // If both offers are deactivated by admin, hide this section completely from the homepage
+  if (!isPrimaryActive && !isSecondaryActive) return null;
+
+  // Resolved active offer index (forces active offer if one is deactivated)
+  const currentOfferIndex: 0 | 1 = !isPrimaryActive && isSecondaryActive
+    ? 1
+    : isPrimaryActive && !isSecondaryActive
+    ? 0
+    : activeOfferIndex;
+
+  const showBothOffers = isPrimaryActive && isSecondaryActive;
+
+  // Single-product vs multi-item bundle check
+  const isPrimarySingleProduct = !primaryOffer?.bars || primaryOffer.bars.length <= 1;
+  const isSecondarySingleProduct = !secondaryOffer?.bars || secondaryOffer.bars.length <= 1;
 
   // ── Primary Offer Setup ──
   const primaryIncludedBars = primaryOffer?.bars || [];
@@ -113,6 +163,22 @@ export default function FestivalOfferSection() {
     goToPrimarySlide(newIdx);
   };
 
+  // Auto changes slides for The Grand Festival Gift Collection every 3.5 seconds
+  useEffect(() => {
+    if (activeOfferIndex !== 0 || isPrimaryHovered || isPrimarySingleProduct) return;
+    const interval = setInterval(() => {
+      setPrimarySelectedView((current) => {
+        const total = primaryAllSlides.length;
+        const curIdx = current === "box" ? 0 : typeof current === "number" ? current + 1 : 0;
+        const nextIdx = (curIdx + 1) % total;
+        return nextIdx === 0 ? "box" : nextIdx - 1;
+      });
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [activeOfferIndex, isPrimaryHovered, isPrimarySingleProduct, primaryAllSlides.length]);
+
+
   const primaryActiveBar =
     typeof primarySelectedView === "number" && primaryIncludedBars[primarySelectedView]
       ? primaryIncludedBars[primarySelectedView]
@@ -126,7 +192,7 @@ export default function FestivalOfferSection() {
         });
 
   const primarySoapObj: Soap = useMemo(() => ({
-    id: primaryOffer.id,
+    id: primaryOffer.productId || primaryOffer.id,
     name: primaryOffer.title,
     tagline: primaryOffer.subtitle,
     mainCategory: "Festive & Luxury Gift Sets",
@@ -136,21 +202,21 @@ export default function FestivalOfferSection() {
     originalPrice: primaryOffer.originalPrice,
     rating: 5.0,
     reviewsCount: 94,
-    weight: "4-Bar Keepsake Set",
+    weight: isPrimarySingleProduct ? (primaryIncludedBars[0]?.weight || "Single Artisanal Bar") : `${primaryIncludedBars.length}-Bar Keepsake Set`,
     taxType: "inclusive",
     taxRate: 18,
     cureTime: "Limited Holiday Batch",
-    fragranceNotes: ["Botanical resins", "Gold flakes"],
-    keyIngredients: ["24k Cosmetic Gold", "Botanical Resins"],
+    fragranceNotes: primaryIncludedBars[0]?.aroma ? [primaryIncludedBars[0].aroma] : ["Botanical resins", "Gold flakes"],
+    keyIngredients: primaryIncludedBars[0]?.botanical ? [primaryIncludedBars[0].botanical] : ["24k Cosmetic Gold", "Botanical Resins"],
     fullIngredients: ["Saponified Olive Oil, Shea Butter, Plant Oils, 24k Cosmetic Gold Leaf"],
     skinType: "All Skin Types • Luxury Gifting",
-    soapBenefits: ["Four distinct holiday sensory rituals in one keepsake box"],
-    ritualHowToUse: "Unbox each numbered bar as part of your holiday bathing ritual.",
+    soapBenefits: primaryIncludedBars[0]?.benefit ? [primaryIncludedBars[0].benefit] : ["Handcrafted cold-process soap formulated with rare natural actives"],
+    ritualHowToUse: "Work into a rich lather between wet hands, gently massage onto skin, and rinse thoroughly.",
     description: primaryOffer.description,
-    image: primaryOffer.mainImage,
+    image: primaryOffer.mainImage || primaryIncludedBars[0]?.image || CLOUDINARY_IMAGES.dragonsBlood,
     inStock: true,
     isFestive: true,
-  }), [primaryOffer]);
+  }), [primaryOffer, isPrimarySingleProduct, primaryIncludedBars]);
 
   // ── Secondary Offer Setup ──
   const secondaryIncludedBars = secondaryOffer?.bars || [];
@@ -200,7 +266,7 @@ export default function FestivalOfferSection() {
         });
 
   const secondarySoapObj: Soap = useMemo(() => ({
-    id: secondaryOffer.id,
+    id: secondaryOffer.productId || secondaryOffer.id,
     name: secondaryOffer.title,
     tagline: secondaryOffer.subtitle,
     mainCategory: "Specialty Curations",
@@ -210,103 +276,126 @@ export default function FestivalOfferSection() {
     originalPrice: secondaryOffer.originalPrice,
     rating: 5.0,
     reviewsCount: 78,
-    weight: "3-Bar Heritage Curation",
+    weight: isSecondarySingleProduct ? (secondaryIncludedBars[0]?.weight || "Single Artisanal Bar") : `${secondaryIncludedBars.length}-Bar Heritage Curation`,
     taxType: "inclusive",
     taxRate: 18,
     cureTime: "Aged 8 Weeks",
-    fragranceNotes: ["Mongra Saffron", "Forest Honey", "Khus Vetiver"],
-    keyIngredients: ["Kashmiri Saffron", "Farm Goat Milk", "Raw Honey"],
+    fragranceNotes: secondaryIncludedBars[0]?.aroma ? [secondaryIncludedBars[0].aroma] : ["Mongra Saffron", "Forest Honey", "Khus Vetiver"],
+    keyIngredients: secondaryIncludedBars[0]?.botanical ? [secondaryIncludedBars[0].botanical] : ["Kashmiri Saffron", "Farm Goat Milk", "Raw Honey"],
     fullIngredients: ["Saponified Cold Pressed Oils, Farm Milk, Kashmiri Saffron, Raw Forest Honey"],
     skinType: "All Skin Types • Nourishing Ayurvedic",
-    soapBenefits: ["Imparts healthy radiant glow", "Deeply restores moisture barrier"],
+    soapBenefits: secondaryIncludedBars[0]?.benefit ? [secondaryIncludedBars[0].benefit] : ["Imparts healthy radiant glow", "Deeply restores moisture barrier"],
     ritualHowToUse: "Work into a dense velvety froth between warm palms, apply in gentle circular motions, rinse thoroughly.",
     description: secondaryOffer.description,
-    image: secondaryOffer.mainImage,
+    image: secondaryOffer.mainImage || secondaryIncludedBars[0]?.image || CLOUDINARY_IMAGES.saffronHoney,
     inStock: true,
     isFestive: true,
-  }), [secondaryOffer]);
+  }), [secondaryOffer, isSecondarySingleProduct, secondaryIncludedBars]);
+
+  // Find existing items in cart to allow multiple additions / quantity sync
+  const primaryCartItem = cart.find(
+    (item) => item.soap.id === (primaryOffer.productId || primaryOffer.id)
+  );
+  const secondaryCartItem = cart.find(
+    (item) => item.soap.id === (secondaryOffer.productId || secondaryOffer.id)
+  );
 
   const handleCopyCode = (code: string, discount: number) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
-    showToast(`Promo code "${code}" copied! ${discount}% Off storewide ✨`);
+    showToast(`Promo code "${code}" copied! ${discount}% Off ✨`);
     setTimeout(() => setCopiedCode(null), 2400);
   };
 
   const handleToggleOffer = (dir: "prev" | "next") => {
+    if (!showBothOffers) return;
     setActiveOfferIndex((prev) => (prev === 0 ? 1 : 0));
   };
 
   return (
-    <section id="festival-offers" className="festival-collector-showcase" aria-label="Exclusive Holiday Gift Offers">
+    <section
+      id="festival-offers"
+      className="festival-collector-showcase"
+      aria-label="Exclusive Holiday Gift Offers"
+      onMouseEnter={() => setIsSectionHovered(true)}
+      onMouseLeave={() => setIsSectionHovered(false)}
+    >
       <div className="container">
         {/* Section Header */}
         <div className="section-header" style={{ marginBottom: "1.5rem" }}>
           <span className="section-tag festive-tag">
             <Gift size={13} style={{ display: "inline", verticalAlign: "middle", marginRight: "5px" }} />
-            2026 LIMITED HOLIDAY COLLECTOR OFFERS
+            {currentOfferIndex === 0
+              ? (primaryOffer.sectionTag || "2026 LIMITED HOLIDAY COLLECTOR OFFERS")
+              : (secondaryOffer.sectionTag || "ARTISANAL ROYAL RESERVE")}
           </span>
           <h2 className="section-title">
-            {activeOfferIndex === 0 ? primaryOffer.title : secondaryOffer.title}
+            {currentOfferIndex === 0 ? primaryOffer.title : secondaryOffer.title}
           </h2>
           <p className="section-subtitle">
-            {activeOfferIndex === 0 ? primaryOffer.subtitle : secondaryOffer.subtitle}
+            {currentOfferIndex === 0 ? primaryOffer.subtitle : secondaryOffer.subtitle}
           </p>
         </div>
 
-        {/* Unified Slider Navigation Header (Switch between Main Offer & Secondary Offer) */}
-        <div className="offers-slider-controls-wrap">
-          <button
-            type="button"
-            onClick={() => handleToggleOffer("prev")}
-            className="offers-nav-arrow-btn"
-            aria-label="Previous offer"
-            title="Previous offer"
-          >
-            <ChevronLeft size={22} />
-          </button>
-
-          <div className="offers-tabs-track">
+        {/* Unified Slider Navigation Header (Only shown when BOTH offers are active) */}
+        {showBothOffers && (
+          <div className="offers-slider-controls-wrap">
             <button
               type="button"
-              onClick={() => setActiveOfferIndex(0)}
-              className={`offer-tab-pill ${activeOfferIndex === 0 ? "active" : ""}`}
-              aria-label="View Grand Festival Vault Box offer"
+              onClick={() => handleToggleOffer("prev")}
+              className="offers-nav-arrow-btn"
+              aria-label="Previous offer"
+              title="Previous offer"
             >
-              <span>🎁 Offer 01: Grand Festival Vault Box</span>
-              <span className="offer-tab-badge">{primaryOffer.discountText}</span>
+              <ChevronLeft size={22} />
             </button>
 
+            <div className="offers-tabs-track">
+              <button
+                type="button"
+                onClick={() => setActiveOfferIndex(0)}
+                className={`offer-tab-pill ${currentOfferIndex === 0 ? "active" : ""}`}
+                aria-label={`View ${primaryOffer.title}`}
+              >
+                <span>🎁 Offer 01: {primaryOffer.title}</span>
+                <span className="offer-tab-badge">{primaryOffer.discountText}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveOfferIndex(1)}
+                className={`offer-tab-pill gold ${currentOfferIndex === 1 ? "active" : ""}`}
+                aria-label={`View ${secondaryOffer.title}`}
+              >
+                <span>✨ Offer 02: {secondaryOffer.title}</span>
+                <span className="offer-tab-badge">{secondaryOffer.discountText}</span>
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={() => setActiveOfferIndex(1)}
-              className={`offer-tab-pill gold ${activeOfferIndex === 1 ? "active" : ""}`}
-              aria-label="View Royal Ayurvedic Saffron Curation offer"
+              onClick={() => handleToggleOffer("next")}
+              className="offers-nav-arrow-btn"
+              aria-label="Next offer"
+              title="Next offer"
             >
-              <span>✨ Offer 02: Royal Ayurvedic Saffron Curation</span>
-              <span className="offer-tab-badge">{secondaryOffer.discountText}</span>
+              <ChevronRight size={22} />
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => handleToggleOffer("next")}
-            className="offers-nav-arrow-btn"
-            aria-label="Next offer"
-            title="Next offer"
-          >
-            <ChevronRight size={22} />
-          </button>
-        </div>
+        )}
 
         {/* ─────────────────────────────────────────────────────────────
             OFFER 01: PRIMARY FESTIVAL COLLECTOR VAULT BOX
            ───────────────────────────────────────────────────────────── */}
-        {activeOfferIndex === 0 && (
+        {currentOfferIndex === 0 && isPrimaryActive && (
           <div className="collector-box-card offers-active-stage">
-            {/* Left Column: Visual Showcase & Interactive Bar Explorer */}
-            <div className="collector-media-col">
-              <div className="collector-image-frame">
+            {/* Left Column: Visual Showcase */}
+            <div
+              className="collector-media-col"
+              onMouseEnter={() => setIsPrimaryHovered(true)}
+              onMouseLeave={() => setIsPrimaryHovered(false)}
+            >
+              <div className="collector-image-frame" style={isPrimarySingleProduct ? { borderRadius: "16px", overflow: "hidden" } : undefined}>
                 <div className="collector-frame-badges">
                   <span className="collector-edition-pill">
                     <Sparkles size={12} /> {primaryOffer.badgeText}
@@ -316,150 +405,184 @@ export default function FestivalOfferSection() {
                   </span>
                 </div>
 
-                {/* Main Carousel Slider Arrows */}
-                <button
-                  type="button"
-                  onClick={handlePrevPrimarySlide}
-                  className="collector-slider-arrow prev"
-                  aria-label="Previous bar in offer"
-                  title="Previous item"
-                >
-                  <ChevronLeft size={22} />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNextPrimarySlide}
-                  className="collector-slider-arrow next"
-                  aria-label="Next bar in offer"
-                  title="Next item"
-                >
-                  <ChevronRight size={22} />
-                </button>
-
-                <Image
-                  key={primarySelectedView === "box" ? primaryOffer.mainImage : primaryIncludedBars[primarySelectedView]?.image}
-                  src={primarySelectedView === "box" ? primaryOffer.mainImage : primaryIncludedBars[primarySelectedView]?.image}
-                  alt={primarySelectedView === "box" ? primaryOffer.title : primaryIncludedBars[primarySelectedView]?.name}
-                  width={720}
-                  height={540}
-                  priority
-                  className="collector-box-img"
-                />
-
-                {/* Slider Dots Indicator */}
-                <div className="collector-slider-dots">
-                  {primaryAllSlides.map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => goToPrimarySlide(i)}
-                      className={`slider-dot ${primaryCurrentSlideIndex === i ? "active" : ""}`}
-                      aria-label={`Go to slide ${i + 1}`}
-                    />
-                  ))}
-                </div>
-
-                {/* View Indicator Overlay */}
-                <div className="collector-image-caption-bar">
-                  <span className="caption-text">
-                    Viewing: <strong>{primarySelectedView === "box" ? primaryOffer.title : primaryIncludedBars[primarySelectedView]?.name}</strong>
-                  </span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span className="collector-slide-counter">
-                      {primaryCurrentSlideIndex + 1} / {primaryAllSlides.length}
-                    </span>
-                    {primarySelectedView !== "box" && (
-                      <button
-                        type="button"
-                        onClick={() => setPrimarySelectedView("box")}
-                        className="caption-reset-btn"
-                      >
-                        <RefreshCw size={12} /> Full Box
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Included Bars Interactive Navigation */}
-              <div className="collector-bars-nav">
-                <div className="bars-nav-header">
-                  <div>
-                    <h4 className="bars-nav-title">Included Inside The Vault Box:</h4>
-                    <p className="bars-nav-subtitle">Click any bar or use &larr; &rarr; arrows to browse</p>
-                  </div>
-                  <div className="bars-nav-controls">
+                {!isPrimarySingleProduct && (
+                  <>
                     <button
                       type="button"
                       onClick={handlePrevPrimarySlide}
-                      className="bars-scroll-btn prev"
-                      aria-label="Previous bar"
-                      title="Previous bar"
+                      className="collector-slider-arrow prev"
+                      aria-label="Previous bar in offer"
+                      title="Previous item"
                     >
-                      <ChevronLeft size={16} />
+                      <ChevronLeft size={22} />
                     </button>
                     <button
                       type="button"
                       onClick={handleNextPrimarySlide}
-                      className="bars-scroll-btn next"
-                      aria-label="Next bar"
-                      title="Next bar"
+                      className="collector-slider-arrow next"
+                      aria-label="Next bar in offer"
+                      title="Next item"
                     >
-                      <ChevronRight size={16} />
+                      <ChevronRight size={22} />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setPrimarySelectedView("box")}
-                      className={`box-overview-tab-btn ${primarySelectedView === "box" ? "active" : ""}`}
-                    >
-                      <Eye size={13} /> Full Box Overview
-                    </button>
-                  </div>
-                </div>
+                  </>
+                )}
 
-                <div className="bars-thumbnails-grid">
-                  {primaryIncludedBars.map((bar, idx) => (
-                    <button
-                      key={bar.id}
-                      type="button"
-                      onClick={() => setPrimarySelectedView(idx)}
-                      className={`bar-thumb-card ${primarySelectedView === idx ? "active" : ""}`}
-                      aria-label={`View ${bar.name}`}
-                    >
-                      <div className="bar-thumb-img-wrap">
-                        <Image
-                          src={bar.image}
-                          alt={bar.name}
-                          width={90}
-                          height={90}
-                          className="bar-thumb-img"
+                <Image
+                  key={isPrimarySingleProduct ? primaryOffer.mainImage : (primarySelectedView === "box" ? primaryOffer.mainImage : primaryIncludedBars[primarySelectedView]?.image)}
+                  src={isPrimarySingleProduct ? primaryOffer.mainImage : (primarySelectedView === "box" ? primaryOffer.mainImage : primaryIncludedBars[primarySelectedView]?.image)}
+                  alt={isPrimarySingleProduct ? primaryOffer.title : (primarySelectedView === "box" ? primaryOffer.title : primaryIncludedBars[primarySelectedView]?.name)}
+                  width={720}
+                  height={540}
+                  priority
+                  className="collector-box-img"
+                  style={isPrimarySingleProduct ? { width: "100%", height: "auto", maxHeight: "480px", objectFit: "cover" } : undefined}
+                />
+
+                {!isPrimarySingleProduct && (
+                  <>
+                    {/* Slider Dots Indicator */}
+                    <div className="collector-slider-dots">
+                      {primaryAllSlides.map((_, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => goToPrimarySlide(i)}
+                          className={`slider-dot ${primaryCurrentSlideIndex === i ? "active" : ""}`}
+                          aria-label={`Go to slide ${i + 1}`}
                         />
-                        <span className="bar-thumb-num">0{idx + 1}</span>
-                      </div>
-                      <div className="bar-thumb-info">
-                        <span className="bar-thumb-name">{bar.name}</span>
-                        <span className="bar-thumb-weight">{bar.weight}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                      ))}
+                    </div>
 
-                <div className="bar-detail-callout">
-                  <div className="callout-header">
-                    <span className="callout-badge">Botanical Profile • {primaryActiveBar.name}</span>
-                    <span className="callout-lather">🫧 {primaryActiveBar.lather}</span>
+                    {/* View Indicator Overlay */}
+                    <div className="collector-image-caption-bar">
+                      <span className="caption-text">
+                        Viewing: <strong>{primarySelectedView === "box" ? primaryOffer.title : primaryIncludedBars[primarySelectedView]?.name}</strong>
+                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span className="collector-slide-counter">
+                          {primaryCurrentSlideIndex + 1} / {primaryAllSlides.length}
+                        </span>
+                        {primarySelectedView !== "box" && (
+                          <button
+                            type="button"
+                            onClick={() => setPrimarySelectedView("box")}
+                            className="caption-reset-btn"
+                          >
+                            <RefreshCw size={12} /> Full Box
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Included Bars Interactive Navigation - Hidden when single product is selected */}
+              {!isPrimarySingleProduct && (
+                <div className="collector-bars-nav">
+                  <div className="bars-nav-header">
+                    <div>
+                      <h4 className="bars-nav-title">Included Inside The Vault Box:</h4>
+                      <p className="bars-nav-subtitle">Click any bar or use &larr; &rarr; arrows to browse</p>
+                    </div>
+                    <div className="bars-nav-controls">
+                      <button
+                        type="button"
+                        onClick={handlePrevPrimarySlide}
+                        className="bars-scroll-btn prev"
+                        aria-label="Previous bar"
+                        title="Previous bar"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNextPrimarySlide}
+                        className="bars-scroll-btn next"
+                        aria-label="Next bar"
+                        title="Next bar"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrimarySelectedView("box")}
+                        className={`box-overview-tab-btn ${primarySelectedView === "box" ? "active" : ""}`}
+                      >
+                        <Eye size={13} /> Full Box Overview
+                      </button>
+                    </div>
                   </div>
-                  <div className="callout-scent">
-                    <strong>Aroma Notes:</strong> {primaryActiveBar.aroma}
+
+                  <div className="bars-thumbnails-grid">
+                    {primaryIncludedBars.map((bar, idx) => (
+                      <button
+                        key={bar.id}
+                        type="button"
+                        onClick={() => setPrimarySelectedView(idx)}
+                        className={`bar-thumb-card ${primarySelectedView === idx ? "active" : ""}`}
+                        aria-label={`View ${bar.name}`}
+                      >
+                        <div className="bar-thumb-img-wrap">
+                          <Image
+                            src={bar.image}
+                            alt={bar.name}
+                            width={90}
+                            height={90}
+                            className="bar-thumb-img"
+                          />
+                          <span className="bar-thumb-num">0{idx + 1}</span>
+                        </div>
+                        <div className="bar-thumb-info">
+                          <span className="bar-thumb-name">{bar.name}</span>
+                          <span className="bar-thumb-weight">{bar.weight}</span>
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                  <div className="callout-benefit">
-                    <strong>Skin Ritual:</strong> {primaryActiveBar.benefit}
-                  </div>
-                  <div className="callout-botanicals">
-                    <strong>Key Actives:</strong> {primaryActiveBar.botanical}
+
+                  <div className="bar-detail-callout">
+                    <div className="callout-header">
+                      <span className="callout-badge">Botanical Profile • {primaryActiveBar.name}</span>
+                      <span className="callout-lather">🫧 {primaryActiveBar.lather}</span>
+                    </div>
+                    <div className="callout-scent">
+                      <strong>Aroma Notes:</strong> {primaryActiveBar.aroma}
+                    </div>
+                    <div className="callout-benefit">
+                      <strong>Skin Ritual:</strong> {primaryActiveBar.benefit}
+                    </div>
+                    <div className="callout-botanicals">
+                      <strong>Key Actives:</strong> {primaryActiveBar.botanical}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {primaryIncludedBars.length === 1 && (
+                <div className="bar-detail-callout" style={{ marginTop: "1rem" }}>
+                  <div className="callout-header">
+                    <span className="callout-badge">Botanical Profile • {primaryIncludedBars[0].name}</span>
+                    {primaryIncludedBars[0].lather && <span className="callout-lather">🫧 {primaryIncludedBars[0].lather}</span>}
+                  </div>
+                  {primaryIncludedBars[0].aroma && (
+                    <div className="callout-scent">
+                      <strong>Aroma Notes:</strong> {primaryIncludedBars[0].aroma}
+                    </div>
+                  )}
+                  {primaryIncludedBars[0].benefit && (
+                    <div className="callout-benefit">
+                      <strong>Skin Ritual:</strong> {primaryIncludedBars[0].benefit}
+                    </div>
+                  )}
+                  {primaryIncludedBars[0].botanical && (
+                    <div className="callout-botanicals">
+                      <strong>Key Actives:</strong> {primaryIncludedBars[0].botanical}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Right Column: Details, Countdown, Promo, Actions */}
@@ -480,13 +603,11 @@ export default function FestivalOfferSection() {
               </div>
 
               <h3 className="collector-card-title">
-                Dragon&apos;s Glow 4-Piece Grand Collector Vault Box
+                {primaryOffer.title}
               </h3>
 
               <p className="collector-description">
-                Hand-poured in limited small batches and cured for eight full weeks. Each bar is infused with 
-                ancient botanical resins and genuine 24k cosmetic gold flakes. Encased in a rigid gold-foiled 
-                dragon keepsake box with a free hand-carved teak soap dish.
+                {primaryOffer.description || "Handcrafted in limited small batches and cured for eight full weeks. Infused with ancient botanical extracts and skin-replenishing plant oils."}
               </p>
 
               <div className="collector-price-banner">
@@ -498,7 +619,11 @@ export default function FestivalOfferSection() {
               </div>
 
               <div className="collector-value-breakdown">
-                <span>Worth ₹{primaryOffer.originalPrice.toLocaleString("en-IN")} if bought individually • Only <strong>₹{Math.round(primaryOffer.salePrice / (primaryIncludedBars.length || 1))}</strong> per bar</span>
+                <span>
+                  {isPrimarySingleProduct
+                    ? `Worth ₹${primaryOffer.originalPrice.toLocaleString("en-IN")} • Special Limited Offer Discount`
+                    : `Worth ₹${primaryOffer.originalPrice.toLocaleString("en-IN")} if bought individually • Only ₹${Math.round(primaryOffer.salePrice / (primaryIncludedBars.length || 1))} per bar`}
+                </span>
               </div>
 
               <div className="collector-countdown-wrapper">
@@ -533,7 +658,7 @@ export default function FestivalOfferSection() {
                 <div className="promo-info">
                   <span className="promo-badge">HOLIDAY SAVINGS CODE</span>
                   <div className="promo-headline">VOUCHER CODE: <strong>{primaryOffer.promoCode}</strong></div>
-                  <div className="promo-sub">Use at checkout for an instant {primaryOffer.discountPercent}% storewide discount</div>
+                  <div className="promo-sub">Use at checkout for an instant {primaryOffer.discountPercent}% discount on this offer</div>
                 </div>
                 <button
                   type="button"
@@ -552,24 +677,56 @@ export default function FestivalOfferSection() {
                 </button>
               </div>
 
+              {primaryCartItem && (
+                <div className="collector-in-cart-badge">
+                  <Check size={13} /> In Your Bag: {primaryCartItem.quantity} {primaryCartItem.quantity === 1 ? "unit" : "units"}
+                </div>
+              )}
+
               <div className="collector-actions-bar">
+                {/* Quantity Stepper to add more than one */}
+                <div className="collector-qty-stepper" title="Select quantity">
+                  <button
+                    type="button"
+                    onClick={() => setPrimaryQty((q) => Math.max(1, q - 1))}
+                    aria-label="Decrease quantity"
+                    className="qty-btn"
+                    disabled={primaryQty <= 1}
+                  >
+                    <Minus size={14} />
+                  </button>
+                  <span className="qty-val">{primaryQty}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPrimaryQty((q) => q + 1)}
+                    aria-label="Increase quantity"
+                    className="qty-btn"
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => {
-                    addToCart(primarySoapObj, 1);
+                    addToCart(primarySoapObj, primaryQty);
                     setAddedOffer(primaryOffer.id);
-                    showToast(`"${primaryOffer.title}" added to your bag! 🎁`);
+                    showToast(
+                      primaryCartItem
+                        ? `Added ${primaryQty} more "${primaryOffer.title}" to bag! (Total: ${primaryCartItem.quantity + primaryQty}) 🎁`
+                        : `Added ${primaryQty}x "${primaryOffer.title}" to bag! 🎁`
+                    );
                     setTimeout(() => setAddedOffer(null), 1800);
                   }}
                   className={`btn-primary collector-add-btn ${addedOffer === primaryOffer.id ? "added" : ""}`}
                 >
                   {addedOffer === primaryOffer.id ? (
                     <>
-                      <Check size={18} /> Added to Your Bag
+                      <Check size={18} /> Added {primaryQty} to Bag!
                     </>
                   ) : (
                     <>
-                      <ShoppingBag size={18} /> Add Grand Vault Box • ₹{primaryOffer.salePrice.toLocaleString("en-IN")}
+                      <ShoppingBag size={18} /> {primaryCartItem ? `Add More (${primaryQty})` : `Add ${primaryQty > 1 ? `${primaryQty}x ` : ""}to Bag`} • ₹{(primaryOffer.salePrice * primaryQty).toLocaleString("en-IN")}
                     </>
                   )}
                 </button>
@@ -580,22 +737,34 @@ export default function FestivalOfferSection() {
                   onClick={() => openWhatsAppDirect(primarySoapObj)}
                   aria-label="Enquire on WhatsApp"
                   title="Enquire on WhatsApp"
-                  style={{ width: "48px", height: "48px", borderRadius: "var(--radius-full)" }}
+                  style={{ width: "48px", height: "48px", borderRadius: "var(--radius-full)", flexShrink: 0 }}
                 >
                   <WhatsAppIcon size={24} />
                 </button>
               </div>
 
-              <div className="collector-perks-row">
-                <span className="perk-item">
-                  <Truck size={14} color="var(--color-terracotta)" /> Free Express Dispatch
-                </span>
-                <span className="perk-item">
-                  <Gift size={14} color="var(--color-terracotta)" /> Free Wooden Teak Dish
-                </span>
-                <span className="perk-item">
-                  <ShieldCheck size={14} color="var(--color-terracotta)" /> Gold Leaf Certificate
-                </span>
+              {/* Luxury Trust Badges Ribbon */}
+              <div className="collector-perks-row terracotta-theme">
+                <div className="perk-item">
+                  <div className="perk-item-icon-box">
+                    <Truck size={14} color="var(--color-terracotta)" />
+                  </div>
+                  <span>Free Express Dispatch</span>
+                </div>
+                <div className="perk-item-divider" />
+                <div className="perk-item">
+                  <div className="perk-item-icon-box">
+                    <Gift size={14} color="var(--color-terracotta)" />
+                  </div>
+                  <span>Free Teak Dish & Box</span>
+                </div>
+                <div className="perk-item-divider" />
+                <div className="perk-item">
+                  <div className="perk-item-icon-box">
+                    <ShieldCheck size={14} color="var(--color-terracotta)" />
+                  </div>
+                  <span>100% Cold-Process Purity</span>
+                </div>
               </div>
             </div>
           </div>
@@ -604,11 +773,11 @@ export default function FestivalOfferSection() {
         {/* ─────────────────────────────────────────────────────────────
             OFFER 02: SECONDARY ROYAL AYURVEDIC SAFFRON CURATION
            ───────────────────────────────────────────────────────────── */}
-        {activeOfferIndex === 1 && (
-          <div className="collector-box-card offers-active-stage" style={{ borderColor: "rgba(201, 147, 59, 0.28)" }}>
-            {/* Left Column: Visual Showcase & Interactive Bar Explorer */}
+        {currentOfferIndex === 1 && isSecondaryActive && (
+          <div className="collector-box-card offers-active-stage" style={{ borderColor: "rgba(201, 147, 59, 0.32)" }}>
+            {/* Left Column: Visual Showcase */}
             <div className="collector-media-col">
-              <div className="collector-image-frame">
+              <div className="collector-image-frame" style={isSecondarySingleProduct ? { borderRadius: "16px", overflow: "hidden" } : undefined}>
                 <div className="collector-frame-badges">
                   <span className="collector-edition-pill" style={{ backgroundColor: "var(--color-dragon-black)", color: "#ffffff" }}>
                     <Sparkles size={12} color="var(--color-gold)" /> {secondaryOffer.badgeText}
@@ -618,152 +787,245 @@ export default function FestivalOfferSection() {
                   </span>
                 </div>
 
-                {/* Main Carousel Slider Arrows */}
-                <button
-                  type="button"
-                  onClick={handlePrevSecondarySlide}
-                  className="collector-slider-arrow prev"
-                  aria-label="Previous item in curation"
-                  title="Previous item"
-                >
-                  <ChevronLeft size={22} />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNextSecondarySlide}
-                  className="collector-slider-arrow next"
-                  aria-label="Next item in curation"
-                  title="Next item"
-                >
-                  <ChevronRight size={22} />
-                </button>
-
-                <Image
-                  key={secondarySelectedView === "box" ? secondaryOffer.mainImage : secondaryIncludedBars[secondarySelectedView]?.image}
-                  src={secondarySelectedView === "box" ? secondaryOffer.mainImage : secondaryIncludedBars[secondarySelectedView]?.image}
-                  alt={secondarySelectedView === "box" ? secondaryOffer.title : secondaryIncludedBars[secondarySelectedView]?.name}
-                  width={720}
-                  height={540}
-                  priority
-                  className="collector-box-img"
-                />
-
-                {/* Slider Dots Indicator */}
-                <div className="collector-slider-dots">
-                  {secondaryAllSlides.map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => goToSecondarySlide(i)}
-                      className={`slider-dot ${secondaryCurrentSlideIndex === i ? "active" : ""}`}
-                      aria-label={`Go to slide ${i + 1}`}
-                    />
-                  ))}
-                </div>
-
-                {/* View Indicator Overlay */}
-                <div className="collector-image-caption-bar">
-                  <span className="caption-text">
-                    Viewing: <strong>{secondarySelectedView === "box" ? secondaryOffer.title : secondaryIncludedBars[secondarySelectedView]?.name}</strong>
-                  </span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span className="collector-slide-counter">
-                      {secondaryCurrentSlideIndex + 1} / {secondaryAllSlides.length}
-                    </span>
-                    {secondarySelectedView !== "box" && (
-                      <button
-                        type="button"
-                        onClick={() => setSecondarySelectedView("box")}
-                        className="caption-reset-btn"
-                      >
-                        <RefreshCw size={12} /> View Full Set
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Interactive Bar Selector with Fixed Plural CSS Class */}
-              <div className="collector-bars-nav" style={{ borderColor: "rgba(201, 147, 59, 0.25)" }}>
-                <div className="bars-nav-header">
-                  <div>
-                    <h4 className="bars-nav-title">Included Inside The Curation:</h4>
-                    <p className="bars-nav-subtitle">Click any formula or use &larr; &rarr; arrows to browse</p>
-                  </div>
-                  <div className="bars-nav-controls">
+                {!isSecondarySingleProduct && (
+                  <>
                     <button
                       type="button"
                       onClick={handlePrevSecondarySlide}
-                      className="bars-scroll-btn prev"
-                      aria-label="Previous formula"
-                      title="Previous formula"
+                      className="collector-slider-arrow prev"
+                      aria-label="Previous item in curation"
+                      title="Previous item"
                     >
-                      <ChevronLeft size={16} />
+                      <ChevronLeft size={22} />
                     </button>
                     <button
                       type="button"
                       onClick={handleNextSecondarySlide}
-                      className="bars-scroll-btn next"
-                      aria-label="Next formula"
-                      title="Next formula"
+                      className="collector-slider-arrow next"
+                      aria-label="Next item in curation"
+                      title="Next item"
                     >
-                      <ChevronRight size={16} />
+                      <ChevronRight size={22} />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setSecondarySelectedView("box")}
-                      className={`box-overview-tab-btn ${secondarySelectedView === "box" ? "active" : ""}`}
-                    >
-                      <Eye size={13} /> Full Set Overview
-                    </button>
-                  </div>
-                </div>
+                  </>
+                )}
 
-                <div className="bars-thumbnails-grid" style={{ gridTemplateColumns: `repeat(${Math.min(secondaryIncludedBars.length, 4)}, 1fr)` }}>
-                  {secondaryIncludedBars.map((bar, idx) => (
-                    <button
-                      key={bar.id || idx}
-                      type="button"
-                      className={`bar-thumb-card ${secondarySelectedView === idx ? "active" : ""}`}
-                      onClick={() => setSecondarySelectedView(idx)}
-                      aria-label={`View ${bar.name}`}
-                    >
-                      <div className="bar-thumb-img-wrap">
-                        <Image
-                          src={bar.image}
-                          alt={bar.name}
-                          width={90}
-                          height={90}
-                          className="bar-thumb-img"
+                <Image
+                  key={isSecondarySingleProduct ? secondaryOffer.mainImage : (secondarySelectedView === "box" ? secondaryOffer.mainImage : secondaryIncludedBars[secondarySelectedView]?.image)}
+                  src={isSecondarySingleProduct ? secondaryOffer.mainImage : (secondarySelectedView === "box" ? secondaryOffer.mainImage : secondaryIncludedBars[secondarySelectedView]?.image)}
+                  alt={isSecondarySingleProduct ? secondaryOffer.title : (secondarySelectedView === "box" ? secondaryOffer.title : secondaryIncludedBars[secondarySelectedView]?.name)}
+                  width={720}
+                  height={540}
+                  priority
+                  className="collector-box-img"
+                  style={isSecondarySingleProduct ? { width: "100%", height: "auto", maxHeight: "480px", objectFit: "cover" } : undefined}
+                />
+
+                {!isSecondarySingleProduct && (
+                  <>
+                    {/* Slider Dots Indicator */}
+                    <div className="collector-slider-dots">
+                      {secondaryAllSlides.map((_, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => goToSecondarySlide(i)}
+                          className={`slider-dot ${secondaryCurrentSlideIndex === i ? "active" : ""}`}
+                          aria-label={`Go to slide ${i + 1}`}
                         />
-                        <span className="bar-thumb-num">0{idx + 1}</span>
-                      </div>
-                      <div className="bar-thumb-info">
-                        <span className="bar-thumb-name">{bar.name}</span>
-                        <span className="bar-thumb-weight">{bar.weight}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                      ))}
+                    </div>
 
-                <div className="bar-detail-callout" style={{ borderColor: "rgba(201, 147, 59, 0.2)" }}>
-                  <div className="callout-header">
-                    <span className="callout-badge" style={{ backgroundColor: "#fef3c7", color: "#b45309" }}>
-                      Ayurvedic Profile • {secondaryActiveBar.name}
-                    </span>
-                    <span className="callout-lather">🫧 {secondaryActiveBar.lather}</span>
+                    {/* View Indicator Overlay */}
+                    <div className="collector-image-caption-bar">
+                      <span className="caption-text">
+                        Viewing: <strong>{secondarySelectedView === "box" ? secondaryOffer.title : secondaryIncludedBars[secondarySelectedView]?.name}</strong>
+                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span className="collector-slide-counter">
+                          {secondaryCurrentSlideIndex + 1} / {secondaryAllSlides.length}
+                        </span>
+                        {secondarySelectedView !== "box" && (
+                          <button
+                            type="button"
+                            onClick={() => setSecondarySelectedView("box")}
+                            className="caption-reset-btn"
+                          >
+                            <RefreshCw size={12} /> View Full Set
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Interactive Bar Selector - Hidden when single product is selected */}
+              {!isSecondarySingleProduct && (
+                <div className="collector-bars-nav" style={{ borderColor: "rgba(201, 147, 59, 0.28)", background: "rgba(253, 246, 242, 0.6)" }}>
+                  <div className="bars-nav-header">
+                    <div>
+                      <h4 className="bars-nav-title" style={{ color: "#78350f" }}>Included Inside The Curation:</h4>
+                      <p className="bars-nav-subtitle">Click any formula or use &larr; &rarr; arrows to browse</p>
+                    </div>
+                    <div className="bars-nav-controls">
+                      <button
+                        type="button"
+                        onClick={handlePrevSecondarySlide}
+                        className="bars-scroll-btn prev"
+                        aria-label="Previous formula"
+                        title="Previous formula"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNextSecondarySlide}
+                        className="bars-scroll-btn next"
+                        aria-label="Next formula"
+                        title="Next formula"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSecondarySelectedView("box")}
+                        className={`box-overview-tab-btn ${secondarySelectedView === "box" ? "active" : ""}`}
+                        style={{ borderColor: "rgba(201, 147, 59, 0.4)" }}
+                      >
+                        <Eye size={13} /> Full Set Overview
+                      </button>
+                    </div>
                   </div>
-                  <div className="callout-scent">
-                    <strong>Aroma Notes:</strong> {secondaryActiveBar.aroma}
+
+                  <div className="bars-thumbnails-grid" style={{ gridTemplateColumns: `repeat(${Math.min(secondaryIncludedBars.length, 4)}, 1fr)` }}>
+                    {secondaryIncludedBars.map((bar, idx) => (
+                      <button
+                        key={bar.id || idx}
+                        type="button"
+                        className={`bar-thumb-card ${secondarySelectedView === idx ? "active" : ""}`}
+                        style={{ borderColor: secondarySelectedView === idx ? "var(--color-gold)" : "rgba(201, 147, 59, 0.22)" }}
+                        onClick={() => setSecondarySelectedView(idx)}
+                        aria-label={`View ${bar.name}`}
+                      >
+                        <div className="bar-thumb-img-wrap">
+                          <Image
+                            src={bar.image}
+                            alt={bar.name}
+                            width={90}
+                            height={90}
+                            className="bar-thumb-img"
+                          />
+                          <span className="bar-thumb-num" style={{ background: "var(--color-gold)", color: "#ffffff" }}>0{idx + 1}</span>
+                        </div>
+                        <div className="bar-thumb-info">
+                          <span className="bar-thumb-name">{bar.name}</span>
+                          <span className="bar-thumb-weight" style={{ color: "var(--color-gold-dark)" }}>{bar.weight}</span>
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                  <div className="callout-benefit">
-                    <strong>Skin Ritual:</strong> {secondaryActiveBar.benefit}
-                  </div>
-                  <div className="callout-botanicals">
-                    <strong>Sacred Ingredients:</strong> {secondaryActiveBar.botanical}
+
+                  <div
+                    className="bar-detail-callout"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(254, 250, 240, 0.95) 0%, rgba(253, 246, 242, 0.95) 100%)",
+                      border: "1px solid rgba(201, 147, 59, 0.35)",
+                      borderLeft: "4px solid var(--color-gold)",
+                      borderRadius: "10px",
+                      padding: "0.9rem 1.1rem",
+                      boxShadow: "0 4px 16px rgba(180, 83, 9, 0.05)",
+                    }}
+                  >
+                    <div className="callout-header" style={{ marginBottom: "0.4rem" }}>
+                      <span
+                        className="callout-badge"
+                        style={{
+                          backgroundColor: "rgba(201, 147, 59, 0.14)",
+                          color: "#8a5814",
+                          border: "1px solid rgba(201, 147, 59, 0.3)",
+                          padding: "3px 10px",
+                          borderRadius: "20px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          letterSpacing: "0.03em",
+                        }}
+                      >
+                        ✨ Ayurvedic Formulation • {secondaryActiveBar.name}
+                      </span>
+                      <span className="callout-lather" style={{ color: "var(--color-gold-dark)", fontWeight: 700 }}>
+                        🫧 {secondaryActiveBar.lather}
+                      </span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem", fontSize: "0.78rem" }}>
+                      <div className="callout-scent">
+                        <strong>Aroma:</strong> {secondaryActiveBar.aroma}
+                      </div>
+                      <div className="callout-benefit">
+                        <strong>Ritual:</strong> {secondaryActiveBar.benefit}
+                      </div>
+                    </div>
+                    <div className="callout-botanicals" style={{ marginTop: "4px", fontSize: "0.78rem" }}>
+                      <strong>Sacred Botanicals:</strong> {secondaryActiveBar.botanical}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {secondaryIncludedBars.length === 1 && (
+                <div
+                  className="bar-detail-callout"
+                  style={{
+                    marginTop: "1rem",
+                    background: "linear-gradient(135deg, rgba(254, 250, 240, 0.95) 0%, rgba(253, 246, 242, 0.95) 100%)",
+                    border: "1px solid rgba(201, 147, 59, 0.35)",
+                    borderLeft: "4px solid var(--color-gold)",
+                    borderRadius: "10px",
+                    padding: "0.9rem 1.1rem",
+                    boxShadow: "0 4px 16px rgba(180, 83, 9, 0.05)",
+                  }}
+                >
+                  <div className="callout-header" style={{ marginBottom: "0.4rem" }}>
+                    <span
+                      className="callout-badge"
+                      style={{
+                        backgroundColor: "rgba(201, 147, 59, 0.14)",
+                        color: "#8a5814",
+                        border: "1px solid rgba(201, 147, 59, 0.3)",
+                        padding: "3px 10px",
+                        borderRadius: "20px",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        letterSpacing: "0.03em",
+                      }}
+                    >
+                      ✨ Ayurvedic Formulation • {secondaryIncludedBars[0].name}
+                    </span>
+                    {secondaryIncludedBars[0].lather && (
+                      <span className="callout-lather" style={{ color: "var(--color-gold-dark)", fontWeight: 700 }}>
+                        🫧 {secondaryIncludedBars[0].lather}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem", fontSize: "0.78rem" }}>
+                    {secondaryIncludedBars[0].aroma && (
+                      <div className="callout-scent">
+                        <strong>Aroma:</strong> {secondaryIncludedBars[0].aroma}
+                      </div>
+                    )}
+                    {secondaryIncludedBars[0].benefit && (
+                      <div className="callout-benefit">
+                        <strong>Ritual:</strong> {secondaryIncludedBars[0].benefit}
+                      </div>
+                    )}
+                  </div>
+                  {secondaryIncludedBars[0].botanical && (
+                    <div className="callout-botanicals" style={{ marginTop: "4px", fontSize: "0.78rem" }}>
+                      <strong>Sacred Botanicals:</strong> {secondaryIncludedBars[0].botanical}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Right Column: Details, Countdown, Promo, Actions */}
@@ -788,7 +1050,7 @@ export default function FestivalOfferSection() {
               </h3>
 
               <p className="collector-description">
-                {secondaryOffer.description}
+                {secondaryOffer.description || "Authentic Ayurvedic cold-process soap handcrafted with raw goat milk, saffron stigmas, and cold-pressed botanical infusions."}
               </p>
 
               <div className="collector-price-banner">
@@ -802,7 +1064,11 @@ export default function FestivalOfferSection() {
               </div>
 
               <div className="collector-value-breakdown">
-                <span>Worth ₹{secondaryOffer.originalPrice.toLocaleString("en-IN")} individually • Hand-aged 8 full weeks</span>
+                <span>
+                  {isSecondarySingleProduct
+                    ? `Worth ₹${secondaryOffer.originalPrice.toLocaleString("en-IN")} • Special Limited Offer Discount`
+                    : `Worth ₹${secondaryOffer.originalPrice.toLocaleString("en-IN")} individually • Hand-aged 8 full weeks`}
+                </span>
               </div>
 
               <div className="collector-countdown-wrapper">
@@ -835,9 +1101,11 @@ export default function FestivalOfferSection() {
 
               <div className="collector-promo-card" style={{ borderColor: "rgba(201, 147, 59, 0.3)" }}>
                 <div className="promo-info">
-                  <span className="promo-badge" style={{ backgroundColor: "#fef3c7", color: "#b45309" }}>HERITAGE SAVINGS CODE</span>
+                  <span className="promo-badge" style={{ backgroundColor: "rgba(201, 147, 59, 0.15)", color: "#8a5814", border: "1px solid rgba(201, 147, 59, 0.3)" }}>
+                    HERITAGE SAVINGS CODE
+                  </span>
                   <div className="promo-headline">VOUCHER CODE: <strong>{secondaryOffer.promoCode}</strong></div>
-                  <div className="promo-sub">Use at checkout for an instant {secondaryOffer.discountPercent}% storewide discount</div>
+                  <div className="promo-sub">Use at checkout for an instant {secondaryOffer.discountPercent}% discount on this offer</div>
                 </div>
                 <button
                   type="button"
@@ -857,13 +1125,45 @@ export default function FestivalOfferSection() {
                 </button>
               </div>
 
+              {secondaryCartItem && (
+                <div className="collector-in-cart-badge" style={{ color: "#8a5814", background: "rgba(201, 147, 59, 0.12)", borderColor: "rgba(201, 147, 59, 0.3)" }}>
+                  <Check size={13} /> In Your Bag: {secondaryCartItem.quantity} {secondaryCartItem.quantity === 1 ? "unit" : "units"}
+                </div>
+              )}
+
               <div className="collector-actions-bar">
+                {/* Quantity Stepper to add more than one */}
+                <div className="collector-qty-stepper" title="Select quantity">
+                  <button
+                    type="button"
+                    onClick={() => setSecondaryQty((q) => Math.max(1, q - 1))}
+                    aria-label="Decrease quantity"
+                    className="qty-btn"
+                    disabled={secondaryQty <= 1}
+                  >
+                    <Minus size={14} />
+                  </button>
+                  <span className="qty-val">{secondaryQty}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSecondaryQty((q) => q + 1)}
+                    aria-label="Increase quantity"
+                    className="qty-btn"
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => {
-                    addToCart(secondarySoapObj, 1);
+                    addToCart(secondarySoapObj, secondaryQty);
                     setAddedOffer(secondaryOffer.id);
-                    showToast(`"${secondaryOffer.title}" added to your bag! 🎁`);
+                    showToast(
+                      secondaryCartItem
+                        ? `Added ${secondaryQty} more "${secondaryOffer.title}" to bag! (Total: ${secondaryCartItem.quantity + secondaryQty}) ✨`
+                        : `Added ${secondaryQty}x "${secondaryOffer.title}" to bag! ✨`
+                    );
                     setTimeout(() => setAddedOffer(null), 1800);
                   }}
                   className={`btn-primary collector-add-btn ${addedOffer === secondaryOffer.id ? "added" : ""}`}
@@ -874,11 +1174,11 @@ export default function FestivalOfferSection() {
                 >
                   {addedOffer === secondaryOffer.id ? (
                     <>
-                      <Check size={18} /> Added to Your Bag
+                      <Check size={18} /> Added {secondaryQty} to Bag!
                     </>
                   ) : (
                     <>
-                      <ShoppingBag size={18} /> Add Heritage Curation • ₹{secondaryOffer.salePrice.toLocaleString("en-IN")}
+                      <ShoppingBag size={18} /> {secondaryCartItem ? `Add More (${secondaryQty})` : `Add ${secondaryQty > 1 ? `${secondaryQty}x ` : ""}to Bag`} • ₹{(secondaryOffer.salePrice * secondaryQty).toLocaleString("en-IN")}
                     </>
                   )}
                 </button>
@@ -889,22 +1189,34 @@ export default function FestivalOfferSection() {
                   onClick={() => openWhatsAppDirect(secondarySoapObj)}
                   aria-label="Enquire on WhatsApp"
                   title="Enquire on WhatsApp"
-                  style={{ width: "48px", height: "48px", borderRadius: "var(--radius-full)" }}
+                  style={{ width: "48px", height: "48px", borderRadius: "var(--radius-full)", flexShrink: 0 }}
                 >
                   <WhatsAppIcon size={24} />
                 </button>
               </div>
 
+              {/* Luxury Trust Perks Ribbon */}
               <div className="collector-perks-row">
-                <span className="perk-item">
-                  <Truck size={14} color="var(--color-gold)" /> Free Express Dispatch
-                </span>
-                <span className="perk-item">
-                  <Gift size={14} color="var(--color-gold)" /> Kashmiri Saffron Certificate
-                </span>
-                <span className="perk-item">
-                  <ShieldCheck size={14} color="var(--color-gold)" /> 100% Ayurvedic Purity
-                </span>
+                <div className="perk-item">
+                  <div className="perk-item-icon-box">
+                    <Truck size={14} color="var(--color-gold)" />
+                  </div>
+                  <span>Free Express Dispatch</span>
+                </div>
+                <div className="perk-item-divider" />
+                <div className="perk-item">
+                  <div className="perk-item-icon-box">
+                    <Gift size={14} color="var(--color-gold)" />
+                  </div>
+                  <span>Kashmiri Saffron Certificate</span>
+                </div>
+                <div className="perk-item-divider" />
+                <div className="perk-item">
+                  <div className="perk-item-icon-box">
+                    <ShieldCheck size={14} color="var(--color-gold)" />
+                  </div>
+                  <span>100% Ayurvedic Purity</span>
+                </div>
               </div>
             </div>
           </div>

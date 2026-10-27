@@ -22,9 +22,11 @@ import QuickViewModal from "@/components/QuickViewModal";
 import WhatsAppEnquiryModal from "@/components/WhatsAppEnquiryModal";
 import Toast from "@/components/Toast";
 import { useCart } from "@/context/CartContext";
+import { useDBStore } from "@/context/DBStoreContext";
 
 export default function ContactPage() {
   const { showToast } = useCart();
+  const { siteSettings } = useDBStore();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -49,8 +51,10 @@ export default function ContactPage() {
     const text = encodeURIComponent(
       `Hello Star Light Co.! I would like to inquire with your atelier concierge about your artisanal cold-process soaps.`
     );
-    window.open(`https://wa.me/919876543210?text=${text}`, "_blank");
+    const phone = (siteSettings?.whatsappNumber || "919876543210").replace(/\D/g, "");
+    window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
   };
+
 
   return (
     <>

@@ -4,6 +4,9 @@ import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
 import { DBStoreProvider } from "@/context/DBStoreContext";
 import { CartProvider } from "@/context/CartContext";
+import MaintenanceGuard from "@/components/MaintenanceGuard";
+import DynamicSeoSchema from "@/components/DynamicSeoSchema";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -38,23 +41,23 @@ export const metadata: Metadata = {
     "natural skincare",
     "Star Light Co",
     "festival soap gift sets",
-    "botanical bath bars"
+    "botanical bath bars",
   ],
   authors: [{ name: "Star Light Co. Artisans" }],
   creator: "Star Light Co.",
   publisher: "Star Light Co.",
   openGraph: {
-    title: "STAR LIGHT CO. | Artisanal Cold-Process Soaps",
+    title: "STAR LIGHT CO. | Luxury Artisanal Cold-Process Soaps",
     description:
       "Handcrafted luxury soaps infused with ancient botanicals and sacred Dragon's Blood resin. Limited festival editions available now.",
     url: "https://starlightsoaps.com",
     siteName: "Star Light Co.",
     images: [
       {
-        url: "/images/products/dragons-blood.jpg",
+        url: CLOUDINARY_IMAGES.dragonsBlood,
         width: 1200,
         height: 1200,
-        alt: "Star Light Co. Dragon's Blood Artisanal Soap Bar",
+        alt: "Star Light Co. Artisanal Soap Bar",
       },
     ],
     locale: "en_US",
@@ -62,15 +65,79 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "STAR LIGHT CO. | Luxury Artisanal Soaps",
+    title: "STAR LIGHT CO. | Luxury Artisanal Cold-Process Soaps",
     description:
       "Ancient botanical wisdom meets modern cold-process soap mastery. Discover our signature Dragon's Blood bar.",
-    images: ["/images/products/dragons-blood.jpg"],
+    images: [CLOUDINARY_IMAGES.dragonsBlood],
   },
   icons: {
-    icon: "/images/logo.png",
-    apple: "/images/logo.png",
+    icon: [
+      { url: CLOUDINARY_IMAGES.logo, sizes: "any" },
+      { url: "/icon.png", type: "image/png" },
+      { url: "/favicon.ico" },
+    ],
+    shortcut: [CLOUDINARY_IMAGES.logo],
+    apple: [{ url: CLOUDINARY_IMAGES.logo }, { url: "/icon.png" }],
   },
+};
+
+const initialSchemaGraph = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://starlightsoaps.com/#organization",
+      name: "Star Light Co.",
+      alternateName: "Luxury Cold-Process Soaps & Botanical Skincare",
+      url: "https://starlightsoaps.com",
+      logo: CLOUDINARY_IMAGES.logo,
+      image: CLOUDINARY_IMAGES.banner,
+      description:
+        "Artisanal cold-processed luxury soaps handcrafted with sacred Dragon's Blood resin, organic botanical extracts, and nourishing plant lipids.",
+      email: "orders@starlight.co.in",
+      telephone: "+91 98765 43210",
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: "Artisanal Atelier",
+        addressLocality: "Mumbai",
+        addressRegion: "Maharashtra",
+        postalCode: "400001",
+        addressCountry: "IN",
+      },
+      sameAs: ["https://instagram.com/starlightco", "https://facebook.com/starlightco"],
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://starlightsoaps.com/#website",
+      url: "https://starlightsoaps.com",
+      name: "STAR LIGHT CO. | Luxury Artisanal Cold-Process Soaps",
+      description: "Shop handcrafted luxury cold-process soaps and botanical skincare.",
+      publisher: {
+        "@id": "https://starlightsoaps.com/#organization",
+      },
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: "https://starlightsoaps.com/?search={search_term_string}",
+        },
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@type": "Store",
+      "@id": "https://starlightsoaps.com/#store",
+      name: "Star Light Co. Atelier",
+      url: "https://starlightsoaps.com",
+      logo: CLOUDINARY_IMAGES.logo,
+      image: CLOUDINARY_IMAGES.heroArtisan,
+      telephone: "+91 98765 43210",
+      currenciesAccepted: "INR",
+      paymentAccepted: "Credit Card, Debit Card, UPI, Net Banking, Cash on Delivery",
+      priceRange: "₹299 - ₹2499",
+      openingHours: "Mo-Sa 09:00-19:00",
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -81,12 +148,22 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${playfair.variable} ${jakarta.variable}`} data-scroll-behavior="smooth">
       <head>
-        <link rel="icon" href="/images/logo.png" />
+        <link rel="icon" type="image/png" href={CLOUDINARY_IMAGES.logo} />
+        <link rel="shortcut icon" href={CLOUDINARY_IMAGES.logo} />
+        <link rel="apple-touch-icon" href={CLOUDINARY_IMAGES.logo} />
+        <script
+          id="starlight-initial-jsonld"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(initialSchemaGraph) }}
+        />
       </head>
       <body>
         <StoreProvider>
           <DBStoreProvider>
-            <CartProvider>{children}</CartProvider>
+            <CartProvider>
+              <DynamicSeoSchema />
+              <MaintenanceGuard>{children}</MaintenanceGuard>
+            </CartProvider>
           </DBStoreProvider>
         </StoreProvider>
       </body>

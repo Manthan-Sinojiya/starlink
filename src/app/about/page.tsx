@@ -23,6 +23,7 @@ import CartDrawer from "@/components/CartDrawer";
 import QuickViewModal from "@/components/QuickViewModal";
 import WhatsAppEnquiryModal from "@/components/WhatsAppEnquiryModal";
 import Toast from "@/components/Toast";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 import { openWhatsAppDirect } from "@/utils/whatsapp";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 
@@ -132,7 +133,7 @@ export default function AboutPage() {
                     }}
                   >
                     <Image
-                      src="/images/products/dragons-blood.jpg"
+                      src={CLOUDINARY_IMAGES.dragonsBlood}
                       alt="Artisanal Dragon's Blood Saponification"
                       width={600}
                       height={600}
@@ -287,7 +288,7 @@ export default function AboutPage() {
               >
                 <div style={{ width: "64px", height: "64px", borderRadius: "50%", margin: "0 auto 1.5rem", overflow: "hidden", border: "2px solid var(--color-terracotta)" }}>
                   <Image
-                    src="/images/logo.png"
+                    src={CLOUDINARY_IMAGES.logo}
                     alt="Star Light Co. Seal"
                     width={64}
                     height={64}

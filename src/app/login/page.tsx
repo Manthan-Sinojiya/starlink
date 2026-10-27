@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, User, Mail, Lock, Phone, MapPin,
   CheckCircle2, AlertCircle, Package, LogOut,
-  ShoppingBag, Edit2, Save, X, Star, Truck, Printer,
+  ShoppingBag, Edit2, Save, X, Star, Truck, Printer, FileText,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -30,6 +30,7 @@ function DashboardContent() {
   const [dashTab, setDashTab] = useState<"orders" | "profile">("orders");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<any | null>(null);
+  const [orderFilter, setOrderFilter] = useState<"all" | "paid" | "cod">("all");
 
   // Login form
   const [loginEmail, setLoginEmail] = useState("");
@@ -58,6 +59,15 @@ function DashboardContent() {
   const userOrders = currentUser
     ? orders.filter((o) => o.customerEmail.toLowerCase() === currentUser.email.toLowerCase())
     : [];
+
+  const paidOrdersCount = userOrders.filter((o) => o.paymentStatus === "Paid").length;
+  const codOrdersCount = userOrders.filter((o) => o.paymentMethod === "cod" || o.paymentStatus !== "Paid").length;
+
+  const displayedOrders = userOrders.filter((o) => {
+    if (orderFilter === "paid") return o.paymentStatus === "Paid";
+    if (orderFilter === "cod") return o.paymentMethod === "cod" || o.paymentStatus !== "Paid";
+    return true;
+  });
 
   useEffect(() => {
     if (currentUser) refreshOrders();
@@ -237,6 +247,36 @@ function DashboardContent() {
               {/* Orders Tab */}
               {dashTab === "orders" && (
                 <div>
+                  {/* Order Filter Sub-Tabs */}
+                  {userOrders.length > 0 && (
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.25rem" }}>
+                      {[
+                        { id: "all", label: `All Orders (${userOrders.length})` },
+                        { id: "paid", label: `💳 Paid Orders (${paidOrdersCount})` },
+                        { id: "cod", label: `🚚 Cash on Delivery (${codOrdersCount})` },
+                      ].map((chip) => (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          onClick={() => setOrderFilter(chip.id as any)}
+                          style={{
+                            padding: "0.4rem 0.85rem",
+                            borderRadius: "20px",
+                            border: `1.5px solid ${orderFilter === chip.id ? "var(--color-terracotta)" : "var(--color-border)"}`,
+                            backgroundColor: orderFilter === chip.id ? "var(--color-cream-subtle)" : "#ffffff",
+                            color: orderFilter === chip.id ? "var(--color-terracotta)" : "var(--color-text-secondary)",
+                            fontWeight: 700,
+                            fontSize: "0.8rem",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {userOrders.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "3rem 2rem", backgroundColor: "#fff", borderRadius: "16px", border: "1px dashed var(--color-border)" }}>
                       <ShoppingBag size={36} color="var(--color-text-tertiary)" style={{ margin: "0 auto 0.75rem" }} />
@@ -245,13 +285,61 @@ function DashboardContent() {
                         Explore Soaps
                       </Link>
                     </div>
+                  ) : displayedOrders.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "2.5rem 1.5rem", backgroundColor: "#fff", borderRadius: "14px", border: "1px dashed var(--color-border)" }}>
+                      <p style={{ color: "var(--color-text-secondary)", margin: 0, fontSize: "0.9rem" }}>No orders match this filter.</p>
+                    </div>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                      {userOrders.map((ord) => {
+                      {displayedOrders.map((ord) => {
                         const sc = statusColor(ord.status);
                         const pc = payStatusColor(ord.paymentStatus);
+                        const isPaid = ord.paymentStatus === "Paid";
+
                         return (
-                          <div key={ord._id || ord.id} style={{ backgroundColor: "#fff", borderRadius: "14px", border: "1px solid var(--color-border)", padding: "1.25rem", boxShadow: "var(--shadow-sm)" }}>
+                          <div
+                            key={ord._id || ord.id}
+                            style={{
+                              backgroundColor: "#fff",
+                              borderRadius: "14px",
+                              border: isPaid ? "1.5px solid #86efac" : "1px solid var(--color-border)",
+                              padding: "1.25rem",
+                              boxShadow: "var(--shadow-sm)",
+                              position: "relative",
+                            }}
+                          >
+                            {/* Paid Badge Strip */}
+                            {isPaid && (
+                              <div
+                                style={{
+                                  backgroundColor: "#f0fdf4",
+                                  borderBottom: "1px solid #bbf7d0",
+                                  margin: "-1.25rem -1.25rem 0.85rem -1.25rem",
+                                  padding: "0.45rem 1.25rem",
+                                  borderTopLeftRadius: "12px",
+                                  borderTopRightRadius: "12px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  flexWrap: "wrap",
+                                  gap: "6px",
+                                  fontSize: "0.76rem",
+                                  color: "#166534",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                                  <CheckCircle2 size={13} color="#16a34a" />
+                                  Payment Verified &amp; Paid Online (Razorpay)
+                                </span>
+                                {ord.razorpayPaymentId && (
+                                  <span style={{ fontFamily: "monospace", color: "#15803d", fontSize: "0.72rem" }}>
+                                    TXN: {ord.razorpayPaymentId}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
                             <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
                               <div>
                                 <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: "0.95rem" }}>#{ord.orderNumber}</span>
@@ -301,6 +389,28 @@ function DashboardContent() {
                                   <Printer size={13} />
                                   Print Tax Invoice
                                 </button>
+                                <a
+                                  href={`/api/orders/${ord.orderNumber || ord.id || (ord as any)._id}/invoice`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    padding: "0.35rem 0.75rem",
+                                    borderRadius: "6px",
+                                    border: "1px solid var(--color-border)",
+                                    backgroundColor: "#ffffff",
+                                    color: "var(--color-dragon-black)",
+                                    fontSize: "0.76rem",
+                                    fontWeight: 700,
+                                    textDecoration: "none",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <FileText size={13} color="var(--color-terracotta)" />
+                                  Official Invoice
+                                </a>
                                 <span style={{ fontWeight: 700, color: "var(--color-dragon-black)", fontSize: "0.95rem" }}>
                                   ₹{ord.total.toLocaleString("en-IN")}
                                 </span>

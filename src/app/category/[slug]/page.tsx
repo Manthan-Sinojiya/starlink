@@ -22,6 +22,7 @@ import Toast from "@/components/Toast";
 import ProductCard from "@/components/ProductCard";
 import { useDBStore } from "@/context/DBStoreContext";
 import { CategoryPageSkeleton } from "@/components/Skeleton";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 
 function CategoryContent() {
   const params = useParams();
@@ -186,7 +187,7 @@ function CategoryContent() {
   const bannerImg =
     currentCategory.bannerImage ||
     currentCategory.image ||
-    "/images/products/dragons-blood.jpg";
+    CLOUDINARY_IMAGES.dragonsBlood;
 
   const bannerHeadline =
     currentCategory.bannerHeadline || currentCategory.name;

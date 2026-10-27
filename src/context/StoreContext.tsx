@@ -16,6 +16,7 @@ import {
   Order,
   SEED_ORDERS,
 } from "@/data/soaps";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 
 interface StoreContextType {
   products: Soap[];
@@ -109,7 +110,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             const defaultMatch = CATEGORIES_DATA.find((c) => c.id === cat.id || c.name === cat.name);
             return {
               ...cat,
-              image: cat.image || defaultMatch?.image || "/images/products/dragons-blood.jpg",
+              image: cat.image || defaultMatch?.image || CLOUDINARY_IMAGES.dragonsBlood,
               badge: cat.badge || defaultMatch?.badge || "Signature",
               description: cat.description || defaultMatch?.description || "",
               slug: cat.slug || defaultMatch?.slug || cat.id,
@@ -139,10 +140,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           // Repair broken/nonexistent images from older seeds
           parsedSecondary.bars = parsedSecondary.bars.map((bar: any, bIdx: number) => {
             if (bar.image?.includes("turmeric-glow.jpg")) {
-              return { ...bar, image: "/images/products/terracotta-orange.jpg" };
+              return { ...bar, image: CLOUDINARY_IMAGES.terracottaOrange };
             }
             if (bar.image?.includes("golden-honey.jpg")) {
-              return { ...bar, image: "/images/products/damask-rose.jpg" };
+              return { ...bar, image: CLOUDINARY_IMAGES.damaskRose };
             }
             return bar;
           });
@@ -244,7 +245,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       soapBenefits: productData.soapBenefits || ["Gently cleanses", "Preserves moisture barrier", "Rich velvet lather"],
       ritualHowToUse: productData.ritualHowToUse || "Lather between warm hands, massage gently over damp skin, and rinse thoroughly.",
       description: productData.description || "Crafted using classical cold process saponification methods.",
-      image: productData.image || "/images/products/dragons-blood.jpg",
+      image: productData.image || CLOUDINARY_IMAGES.defaultProduct,
       inStock: productData.inStock !== false,
       isBestseller: !!productData.isBestseller,
       isFestive: !!productData.isFestive,
@@ -312,7 +313,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       name: rawName,
       slug: categoryData.slug || rawId,
       description: categoryData.description || "",
-      image: categoryData.image || "/images/products/dragons-blood.jpg",
+      image: categoryData.image || CLOUDINARY_IMAGES.defaultProduct,
       badge: categoryData.badge || "Signature",
       subcategories: categoryData.subcategories && categoryData.subcategories.length > 0
         ? categoryData.subcategories

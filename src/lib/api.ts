@@ -101,6 +101,21 @@ export const authApi = {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
   },
 
+  async lookup(email: string) {
+    return apiFetch<{
+      success: boolean;
+      exists: boolean;
+      user?: {
+        name: string;
+        email: string;
+        phone?: string;
+        address?: string;
+        state?: string;
+        pincode?: string;
+      };
+    }>(`/api/auth/lookup?email=${encodeURIComponent(email)}`);
+  },
+
   getToken,
   saveToken,
   clearToken,
@@ -181,11 +196,21 @@ export const ordersApi = {
     return apiFetch<{ success: boolean; order: OrderData }>(`/api/orders/${id}`);
   },
 
-  async create(data: Partial<OrderData>) {
-    return apiFetch<{ success: boolean; order: OrderData }>("/api/orders", {
+  async create(data: Partial<OrderData> & { customerPassword?: string; password?: string }) {
+    const res = await apiFetch<{
+      success: boolean;
+      order: OrderData;
+      token?: string;
+      user?: UserData;
+      accountCreated?: boolean;
+    }>("/api/orders", {
       method: "POST",
       body: JSON.stringify(data),
     });
+    if (res.token) {
+      saveToken(res.token);
+    }
+    return res;
   },
 
   async updateStatus(id: string, status: string) {
@@ -269,6 +294,22 @@ export const adminApi = {
     return apiFetch<{ success: boolean; message: string }>("/api/admin/seed");
   },
 };
+
+// ───────────────────────── SETTINGS & CMS ─────────────────────────
+export const settingsApi = {
+  async get() {
+    return apiFetch<{ success: boolean; settings: SiteSettingsData }>("/api/settings");
+  },
+
+  async update(data: Partial<SiteSettingsData>) {
+    return apiFetch<{ success: boolean; settings: SiteSettingsData }>("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+
 
 // ───────────────────────── TYPE DEFINITIONS ─────────────────────────
 export interface UserData {
@@ -405,3 +446,64 @@ export interface ShippingSettingsData {
   defaultStateRate: number;
   stateRates: Record<string, number>;
 }
+
+export interface RitualPillarData {
+  id?: string;
+  iconName?: string;
+  title: string;
+  desc: string;
+}
+
+export interface ReviewStoryData {
+  id?: string;
+  name: string;
+  location: string;
+  verified: boolean;
+  soapPurchased: string;
+  rating: number;
+  review: string;
+  initials?: string;
+}
+
+export interface SocialLinksData {
+  instagram?: string;
+  facebook?: string;
+  twitter?: string;
+}
+
+export interface SeoSettingsData {
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string;
+  organizationName?: string;
+  brandTagline?: string;
+  storeTelephone?: string;
+  storeEmail?: string;
+  priceRange?: string;
+  enableCustomSchema?: boolean;
+  customSchemaJson?: string;
+}
+
+export interface SiteSettingsData {
+  _id?: string;
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  whatsappNumber: string;
+  contactPhone: string;
+  contactEmail: string;
+  socialLinks?: SocialLinksData;
+  seo?: SeoSettingsData;
+  ritualSection: {
+    tag: string;
+    title: string;
+    subtitle: string;
+    pillars: RitualPillarData[];
+  };
+  reviewsSection: {
+    tag: string;
+    title: string;
+    subtitle: string;
+    reviews: ReviewStoryData[];
+  };
+}
+

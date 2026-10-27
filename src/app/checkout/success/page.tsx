@@ -35,7 +35,16 @@ function SuccessContent() {
     const found = orders.find(
       (o) => o.orderNumber === orderId || o.id === orderId || (o as any)._id === orderId
     );
-    if (found) setMatchedOrder(found);
+    if (found) {
+      setMatchedOrder(found);
+    } else if (orderId) {
+      fetch(`/api/orders/${encodeURIComponent(orderId)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && data.order) setMatchedOrder(data.order);
+        })
+        .catch(() => {});
+    }
   }, [orders, orderId]);
 
   const handleWhatsAppConfirm = () => {
@@ -145,6 +154,51 @@ function SuccessContent() {
           Your handcrafted cold-process bars are being carefully packaged with eco-friendly botanical wraps. You will receive dispatch updates via SMS and WhatsApp.
         </p>
 
+        {/* Payment & Account Connection Badges */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", justifyContent: "center", marginBottom: "1.75rem" }}>
+          <div
+            style={{
+              padding: "0.5rem 1rem",
+              borderRadius: "10px",
+              backgroundColor: matchedOrder?.paymentStatus === "Paid" ? "#ecfdf5" : matchedOrder?.paymentMethod === "cod" ? "#fffbeb" : "#ecfdf5",
+              border: `1px solid ${matchedOrder?.paymentStatus === "Paid" ? "#86efac" : matchedOrder?.paymentMethod === "cod" ? "#fde68a" : "#86efac"}`,
+              color: matchedOrder?.paymentStatus === "Paid" ? "#166534" : matchedOrder?.paymentMethod === "cod" ? "#92400e" : "#166534",
+              fontSize: "0.86rem",
+              fontWeight: 700,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            {matchedOrder?.paymentStatus === "Paid" ? (
+              <>💳 Payment Status: Paid &amp; Confirmed (₹{matchedOrder.total?.toLocaleString("en-IN")})</>
+            ) : matchedOrder?.paymentMethod === "cod" ? (
+              <>🚚 Payment Method: Cash on Delivery (₹{matchedOrder?.total?.toLocaleString("en-IN")})</>
+            ) : (
+              <>💳 Payment Status: Verified &amp; Confirmed</>
+            )}
+          </div>
+
+          {(currentUser?.email || matchedOrder?.customerEmail) && (
+            <div
+              style={{
+                padding: "0.5rem 1rem",
+                borderRadius: "10px",
+                backgroundColor: "#f5f3ff",
+                border: "1px solid #ddd6fe",
+                color: "#5b21b6",
+                fontSize: "0.86rem",
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <CheckCircle2 size={16} /> Customer Account: {currentUser?.email || matchedOrder?.customerEmail}
+            </div>
+          )}
+        </div>
+
         {/* Order Timeline */}
         <div
           style={{
@@ -190,8 +244,26 @@ function SuccessContent() {
           </div>
         </div>
 
-        {/* Action Buttons: WhatsApp confirmation + Invoice + Continue */}
+        {/* Action Buttons: WhatsApp confirmation + Invoice + View in Dashboard + Continue */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", justifyContent: "center", marginBottom: "2.5rem" }}>
+          <Link
+            href="/login"
+            style={{
+              padding: "0.75rem 1.35rem",
+              borderRadius: "10px",
+              backgroundColor: "var(--color-terracotta)",
+              color: "#ffffff",
+              textDecoration: "none",
+              fontWeight: 700,
+              fontSize: "0.88rem",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "7px",
+            }}
+          >
+            <Package size={17} /> View My Paid Orders in Account
+          </Link>
+
           <button
             type="button"
             onClick={handleWhatsAppConfirm}

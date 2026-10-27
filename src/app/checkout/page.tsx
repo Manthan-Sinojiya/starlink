@@ -22,7 +22,8 @@ import RazorpayModal from "@/components/RazorpayModal";
 import { useCart } from "@/context/CartContext";
 import { useDBStore } from "@/context/DBStoreContext";
 import { INDIAN_STATES } from "@/data/soaps";
-import { paymentApi } from "@/lib/api";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
+import { paymentApi, authApi } from "@/lib/api";
 
 function CheckoutContent() {
   const router = useRouter();
@@ -40,7 +41,7 @@ function CheckoutContent() {
     showToast,
   } = useCart();
 
-  const { calculateShipping, createOrder, currentUser } = useDBStore();
+  const { calculateShipping, createOrder, currentUser, loginUser } = useDBStore();
 
   const [customerName, setCustomerName] = useState(currentUser?.name || "");
   const [customerEmail, setCustomerEmail] = useState(currentUser?.email || "");
@@ -48,6 +49,13 @@ function CheckoutContent() {
   const [shippingAddress, setShippingAddress] = useState(currentUser?.address || "");
   const [shippingPincode, setShippingPincode] = useState(currentUser?.pincode || "");
   const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "cod">("razorpay");
+
+  // Customer Account Auto-sync and Password States
+  const [accountLookupStatus, setAccountLookupStatus] = useState<"idle" | "loading" | "found" | "new">("idle");
+  const [accountLookupName, setAccountLookupName] = useState<string>("");
+  const [customerPassword, setCustomerPassword] = useState<string>("");
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
 
   const [formErrors, setFormErrors] = useState<{
     name?: string;
@@ -78,6 +86,80 @@ function CheckoutContent() {
       }
     }
   }, [currentUser, setSelectedState, customerName, customerEmail, customerPhone, shippingAddress, shippingPincode]);
+
+  const performEmailLookup = async (emailToSearch: string) => {
+    const cleanEmail = emailToSearch.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      setAccountLookupStatus("idle");
+      return;
+    }
+    if (currentUser?.email?.toLowerCase() === cleanEmail) {
+      setAccountLookupStatus("found");
+      setAccountLookupName(currentUser.name || "");
+      return;
+    }
+    setAccountLookupStatus("loading");
+    try {
+      const res = await authApi.lookup(cleanEmail);
+      if (res.success && res.exists && res.user) {
+        setAccountLookupStatus("found");
+        setAccountLookupName(res.user.name || "");
+        // Auto-fill delivery details saved in DB
+        if (!customerName || customerName === "Valued Customer") {
+          setCustomerName(res.user.name || "");
+        }
+        if (res.user.phone && (!customerPhone || customerPhone.length < 10)) {
+          setCustomerPhone(res.user.phone);
+        }
+        if (res.user.address && !shippingAddress) {
+          setShippingAddress(res.user.address);
+        }
+        if (res.user.pincode && !shippingPincode) {
+          setShippingPincode(res.user.pincode);
+        }
+        if (res.user.state && INDIAN_STATES.includes(res.user.state)) {
+          setSelectedState(res.user.state);
+        }
+        showToast(`Welcome back ${res.user.name}! Saved delivery details loaded.`);
+      } else {
+        setAccountLookupStatus("new");
+      }
+    } catch {
+      setAccountLookupStatus("idle");
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser) return;
+    const timer = setTimeout(() => {
+      if (customerEmail && customerEmail.includes("@") && customerEmail.includes(".")) {
+        performEmailLookup(customerEmail);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [customerEmail, currentUser]);
+
+  const handleInlineLogin = async () => {
+    if (!customerEmail || !customerPassword) {
+      setSignInError("Please enter your account password.");
+      return;
+    }
+    setIsSigningIn(true);
+    setSignInError(null);
+    try {
+      const res = await loginUser(customerEmail.trim(), customerPassword);
+      if (res.success) {
+        showToast("Signed in! Details saved to your account.");
+      } else {
+        setSignInError(res.message || "Invalid password. Please check and try again.");
+      }
+    } catch {
+      setSignInError("Login error. Please try again.");
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
 
   const shippingCost = calculateShipping(subtotal, selectedState);
   const grandTotal = subtotal === 0 ? 0 : total + shippingCost;
@@ -184,6 +266,8 @@ function CheckoutContent() {
         shippingAddress: shippingAddress.trim(),
         shippingState: selectedState,
         shippingPincode: shippingPincode.trim(),
+        customerPassword: customerPassword.trim() || undefined,
+        password: customerPassword.trim() || undefined,
         items: orderItems,
         subtotal,
         shipping: shippingCost,
@@ -265,9 +349,23 @@ function CheckoutContent() {
           </h1>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "2rem" }} className="lg:grid-cols-12">
+        <style>{`
+          .checkout-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            align-items: start;
+          }
+          @media (min-width: 960px) {
+            .checkout-grid {
+              grid-template-columns: 1.35fr 1fr;
+            }
+          }
+        `}</style>
+
+        <div className="checkout-grid">
           {/* Left Column: Delivery & Payment Details Form */}
-          <div style={{ gridColumn: "span 7" }}>
+          <div style={{ width: "100%" }}>
             <form onSubmit={handleSubmitOrder} style={{ backgroundColor: "#ffffff", borderRadius: "16px", padding: "1.75rem", boxShadow: "0 4px 20px rgba(0,0,0,0.04)", border: "1px solid var(--color-border)" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", borderBottom: "1px solid var(--color-border)", paddingBottom: "0.85rem" }}>
                 <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--color-terracotta)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -318,6 +416,11 @@ function CheckoutContent() {
                       type="email"
                       placeholder="name@example.com"
                       value={customerEmail}
+                      onBlur={() => {
+                        if (customerEmail && customerEmail.includes("@")) {
+                          performEmailLookup(customerEmail);
+                        }
+                      }}
                       onChange={(e) => {
                         setCustomerEmail(e.target.value);
                         if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: undefined }));
@@ -368,6 +471,106 @@ function CheckoutContent() {
                     )}
                   </div>
                 </div>
+
+                {/* Account Auto-Sync & Verification Feedback */}
+                {currentUser ? (
+                  <div style={{ backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0", padding: "0.65rem 0.9rem", borderRadius: "8px", fontSize: "0.82rem", color: "#166534", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <CheckCircle2 size={15} color="#16a34a" />
+                    <span>Signed in as <strong>{currentUser.name}</strong> ({currentUser.email}). Delivery details will be auto-saved.</span>
+                  </div>
+                ) : accountLookupStatus === "found" ? (
+                  <div style={{ backgroundColor: "#f0fdf4", border: "1px solid #86efac", padding: "0.85rem 1rem", borderRadius: "10px", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#15803d", fontWeight: 700, fontSize: "0.85rem" }}>
+                        <CheckCircle2 size={16} />
+                        <span>Registered Customer Found: <strong>{accountLookupName || customerEmail}</strong></span>
+                      </div>
+                      <span style={{ fontSize: "0.72rem", backgroundColor: "#dcfce7", color: "#166534", padding: "2px 8px", borderRadius: "12px", fontWeight: 700 }}>
+                        ✓ Saved Details Auto-Filled
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#166534" }}>
+                      Your saved delivery details have been prefilled. Enter your password to sign in or submit order to save updates:
+                    </p>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                      <div style={{ position: "relative", flexGrow: 1, minWidth: "200px" }}>
+                        <Lock size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--color-text-tertiary)" }} />
+                        <input
+                          type="password"
+                          placeholder="Enter your account password"
+                          value={customerPassword}
+                          onChange={(e) => {
+                            setCustomerPassword(e.target.value);
+                            if (signInError) setSignInError(null);
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "0.55rem 0.75rem 0.55rem 2rem",
+                            borderRadius: "6px",
+                            border: "1px solid var(--color-border)",
+                            fontSize: "0.85rem",
+                            backgroundColor: "#ffffff",
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleInlineLogin}
+                        disabled={isSigningIn || !customerPassword}
+                        style={{
+                          padding: "0.55rem 1rem",
+                          borderRadius: "6px",
+                          backgroundColor: "var(--color-terracotta)",
+                          color: "#ffffff",
+                          border: "none",
+                          fontWeight: 700,
+                          fontSize: "0.82rem",
+                          cursor: "pointer",
+                          opacity: isSigningIn || !customerPassword ? 0.7 : 1,
+                        }}
+                      >
+                        {isSigningIn ? "Signing In..." : "1-Click Sign In"}
+                      </button>
+                    </div>
+                    {signInError && (
+                      <div style={{ color: "#dc2626", fontSize: "0.75rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
+                        <AlertCircle size={12} /> {signInError}
+                      </div>
+                    )}
+                  </div>
+                ) : accountLookupStatus === "new" ? (
+                  <div style={{ backgroundColor: "#faf5ff", border: "1px solid #d8b4fe", padding: "0.85rem 1rem", borderRadius: "10px", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#7e22ce", fontWeight: 700, fontSize: "0.85rem" }}>
+                      <Sparkles size={16} />
+                      <span>Automatic Customer Account Creation</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#6b21a8" }}>
+                      A customer account will be automatically created with this email so you can view all paid orders, tax invoices, and track dispatch anytime.
+                    </p>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.76rem", fontWeight: 700, color: "#6b21a8", marginBottom: "3px" }}>
+                        Set Account Password (optional — auto-secure key will be assigned if left blank)
+                      </label>
+                      <div style={{ position: "relative", maxWidth: "340px" }}>
+                        <Lock size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--color-text-tertiary)" }} />
+                        <input
+                          type="password"
+                          placeholder="Choose password (min 6 characters)"
+                          value={customerPassword}
+                          onChange={(e) => setCustomerPassword(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "0.55rem 0.75rem 0.55rem 2rem",
+                            borderRadius: "6px",
+                            border: "1px solid #d8b4fe",
+                            fontSize: "0.85rem",
+                            backgroundColor: "#ffffff",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div>
                   <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.35rem", color: "var(--color-dragon-black)" }}>
@@ -540,7 +743,7 @@ function CheckoutContent() {
           </div>
 
           {/* Right Column: Order Summary */}
-          <div style={{ gridColumn: "span 5" }}>
+          <div style={{ width: "100%", position: "sticky", top: "2rem" }}>
             <div style={{ backgroundColor: "#ffffff", borderRadius: "16px", padding: "1.5rem", border: "1px solid var(--color-border)", boxShadow: "0 4px 20px rgba(0,0,0,0.04)" }}>
               <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "1.2rem", color: "var(--color-dragon-black)", marginBottom: "1rem" }}>
                 Order Summary ({cart.reduce((acc, i) => acc + i.quantity, 0)} items)
@@ -586,7 +789,7 @@ function CheckoutContent() {
 
                 {discountAmount > 0 && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.88rem", color: "var(--color-terracotta)", fontWeight: 600 }}>
-                    <span>Festival Discount (25%)</span>
+                    <span>Voucher Discount ({appliedPromo})</span>
                     <span>-₹{Math.round(discountAmount).toLocaleString("en-IN")}</span>
                   </div>
                 )}
@@ -625,7 +828,7 @@ function CheckoutContent() {
           customerName={customerName}
           customerEmail={customerEmail}
           customerPhone={customerPhone}
-          onSuccess={(response) => handlePaymentSuccess(response)}
+          onSuccess={(response) => handlePaymentSuccess(response, activeRazorpayData.orderNumber, activeRazorpayData.dbOrderId)}
           onClose={() => {
             setIsRazorpayModalOpen(false);
             setIsProcessing(false);
@@ -638,14 +841,82 @@ function CheckoutContent() {
 
 export default function CheckoutPage() {
   return (
-    <>
-      <Navbar />
-      <main style={{ minHeight: "100vh" }}>
+    <div style={{ backgroundColor: "#faf8f5", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      {/* Clean Distraction-Free Checkout Header */}
+      <header
+        style={{
+          borderBottom: "1px solid rgba(197, 160, 89, 0.25)",
+          backgroundColor: "#ffffff",
+          padding: "1rem 1.5rem",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1100px",
+            margin: "0 auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: "0.65rem", textDecoration: "none" }}>
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "9px",
+                backgroundColor: "var(--color-terracotta)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+              }}
+            >
+              <Image src={CLOUDINARY_IMAGES.logo} alt="Star Light Co." width={36} height={36} style={{ objectFit: "cover" }} />
+            </div>
+            <div>
+              <span style={{ fontFamily: "var(--font-serif)", fontWeight: 800, fontSize: "1.1rem", color: "var(--color-dragon-black)", letterSpacing: "0.08em" }}>
+                STAR LIGHT CO.
+              </span>
+              <span style={{ display: "block", fontSize: "0.62rem", color: "var(--color-terracotta)", fontWeight: 700, letterSpacing: "0.15em" }}>
+                ARTISANAL APOTHECARY
+              </span>
+            </div>
+          </Link>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>
+            <Lock size={15} color="#2e7d32" />
+            <span>256-Bit SSL Encrypted Checkout</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Checkout Content */}
+      <main style={{ flexGrow: 1 }}>
         <Suspense fallback={<div style={{ padding: "4rem", textAlign: "center" }}>Loading Checkout...</div>}>
           <CheckoutContent />
         </Suspense>
       </main>
-      <Footer />
-    </>
+
+      {/* Minimalist Checkout Footer */}
+      <footer
+        style={{
+          borderTop: "1px solid rgba(197, 160, 89, 0.2)",
+          backgroundColor: "#ffffff",
+          padding: "1.25rem 1.5rem",
+          textAlign: "center",
+          fontSize: "0.78rem",
+          color: "var(--color-text-tertiary)",
+        }}
+      >
+        <div style={{ maxWidth: "1100px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div>&copy; 2026 Star Light Co. Jaipur Atelier. All rights reserved.</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <span>🌿 100% Cold-Process Saponification</span>
+            <span>📦 Plastic-Free Recyclable Packaging</span>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }

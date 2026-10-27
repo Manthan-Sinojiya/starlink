@@ -119,6 +119,29 @@ export default function TaxInvoiceModal({ order, isOpen, onClose }: TaxInvoiceMo
               Print / Save PDF
             </button>
 
+            <a
+              href={`/api/orders/${order.orderNumber || order.id || (order as any)._id}/invoice`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.45rem 0.95rem",
+                borderRadius: "8px",
+                backgroundColor: "#292524",
+                color: "#ffffff",
+                border: "1px solid #44403c",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                textDecoration: "none",
+                cursor: "pointer",
+              }}
+            >
+              <Download size={14} />
+              Download Official Invoice
+            </a>
+
             <button
               type="button"
               onClick={onClose}

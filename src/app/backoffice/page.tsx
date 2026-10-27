@@ -20,6 +20,7 @@ import {
   Sparkles,
   Search,
   RefreshCw,
+  Eye,
   X,
   Upload,
   Globe,
@@ -34,23 +35,30 @@ import {
   List,
   Check,
   Printer,
+  ShieldAlert,
+  MessageCircle,
+  Phone,
+  Star,
+  Settings,
 } from "lucide-react";
+
 import { useDBStore } from "@/context/DBStoreContext";
 import ImageUpload from "@/components/ImageUpload";
 import TaxInvoiceModal from "@/components/TaxInvoiceModal";
 import { adminApi, HeroSlide } from "@/lib/api";
-import { Soap, CategoryStructure, INDIAN_STATES, Order } from "@/data/soaps";
+import { Soap, CategoryStructure, INDIAN_STATES, Order, DEFAULT_SHIPPING_SETTINGS, DEFAULT_PRIMARY_OFFER, DEFAULT_SECONDARY_OFFER, OfferBarItem } from "@/data/soaps";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 
 const PRESET_IMAGES = [
-  { name: "Dragon's Blood Bar", url: "/images/products/dragons-blood.jpg" },
-  { name: "Charcoal & Kaolin Clay", url: "/images/products/charcoal-clay.jpg" },
-  { name: "Lavender & French Clay", url: "/images/products/lavender-silk.jpg" },
-  { name: "Kashmiri Saffron & Honey", url: "/images/products/saffron-honey.jpg" },
-  { name: "Damask Rose & French Pink Clay", url: "/images/products/damask-rose.jpg" },
-  { name: "Terracotta Citrus Orange", url: "/images/products/terracotta-orange.jpg" },
-  { name: "Eucalyptus Mint Therapy", url: "/images/products/eucalyptus-mint.jpg" },
-  { name: "Sacred Oud & Sandalwood", url: "/images/products/oud-sandalwood.jpg" },
-  { name: "Festive Collector Box", url: "/images/products/festive-box.jpg" },
+  { name: "Dragon's Blood Bar", url: CLOUDINARY_IMAGES.dragonsBlood },
+  { name: "Charcoal & Kaolin Clay", url: CLOUDINARY_IMAGES.charcoalClay },
+  { name: "Lavender & French Clay", url: CLOUDINARY_IMAGES.lavenderSilk },
+  { name: "Kashmiri Saffron & Honey", url: CLOUDINARY_IMAGES.saffronHoney },
+  { name: "Damask Rose & French Pink Clay", url: CLOUDINARY_IMAGES.damaskRose },
+  { name: "Terracotta Citrus Orange", url: CLOUDINARY_IMAGES.terracottaOrange },
+  { name: "Eucalyptus Mint Therapy", url: CLOUDINARY_IMAGES.eucalyptusMint },
+  { name: "Sacred Oud & Sandalwood", url: CLOUDINARY_IMAGES.oudSandalwood },
+  { name: "Festive Collector Box", url: CLOUDINARY_IMAGES.festiveBox },
 ];
 
 export default function AdminPage() {
@@ -58,6 +66,7 @@ export default function AdminPage() {
     products,
     categories,
     shippingSettings,
+    siteSettings,
     primaryOffer,
     secondaryOffer,
     adminUsers,
@@ -72,6 +81,8 @@ export default function AdminPage() {
     deleteCategory,
     reorderCategory,
     updateShippingSettings,
+    updateSiteSettings,
+    refreshSettings,
     updateHeroSlides,
     updatePrimaryOffer,
     updateSecondaryOffer,
@@ -82,29 +93,148 @@ export default function AdminPage() {
     refreshOrders,
     refreshAdminUsers,
     loginUser,
+    logoutUser,
+    isLoaded,
   } = useDBStore();
 
-  const users = adminUsers || [];
 
-  const resetToDefaults = async () => {
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [adminAuthEmail, setAdminAuthEmail] = useState("admin@starlight.com");
+  const [adminAuthPassword, setAdminAuthPassword] = useState("Admin@123456");
+  const [isLoggingInAdmin, setIsLoggingInAdmin] = useState(false);
+  const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
+
+  const handleAdminQuickLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsLoggingInAdmin(true);
+    setAdminAuthError(null);
     try {
-      await adminApi.seedDatabase();
-      await Promise.allSettled([
-        refreshProducts(),
-        refreshCategories(),
-        refreshHero(),
-        refreshOrders(),
-        refreshAdminUsers(),
-      ]);
-      showNotification("Store reset to factory default data.");
-    } catch {
-      showNotification("Failed to reset store", "error");
+      const res = await loginUser(adminAuthEmail.trim(), adminAuthPassword);
+      if (!res.success) {
+        setAdminAuthError(res.message || "Invalid admin credentials");
+      } else {
+        showNotification("Welcome back, Administrator!");
+        await Promise.allSettled([
+          refreshProducts(),
+          refreshCategories(),
+          refreshHero(),
+          refreshOrders(),
+          refreshAdminUsers(),
+        ]);
+      }
+    } catch (err: any) {
+      setAdminAuthError(err.message || "Failed to sign in as admin");
+    } finally {
+      setIsLoggingInAdmin(false);
     }
   };
 
+  const users = adminUsers || [];
+
   const [activeTab, setActiveTab] = useState<
-    "overview" | "products" | "categories" | "hero" | "shipping" | "offers" | "orders" | "users"
+    "overview" | "products" | "categories" | "hero" | "shipping" | "offers" | "orders" | "users" | "settings" | "rituals" | "reviews" | "seo"
   >("overview");
+
+  // Site Settings & Maintenance State
+  const [maintMode, setMaintMode] = useState(siteSettings?.maintenanceMode ?? false);
+  const [maintMsg, setMaintMsg] = useState(siteSettings?.maintenanceMessage || "");
+  const [whatsappNum, setWhatsappNum] = useState(siteSettings?.whatsappNumber || "919876543210");
+  const [contactPh, setContactPh] = useState(siteSettings?.contactPhone || "+91 98765 43210");
+  const [contactEm, setContactEm] = useState(siteSettings?.contactEmail || "care@starlightsoaps.com");
+  const [socialInsta, setSocialInsta] = useState(siteSettings?.socialLinks?.instagram || "https://instagram.com/starlightsoaps");
+  const [socialFb, setSocialFb] = useState(siteSettings?.socialLinks?.facebook || "https://facebook.com/starlightsoaps");
+  const [socialTwitter, setSocialTwitter] = useState(siteSettings?.socialLinks?.twitter || "https://x.com/starlightsoaps");
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // SEO & Schema State
+  const [seoTitle, setSeoTitle] = useState(
+    siteSettings?.seo?.metaTitle || "STAR LIGHT CO. | Luxury Handcrafted Cold-Process Artisanal Soaps"
+  );
+  const [seoDesc, setSeoDesc] = useState(
+    siteSettings?.seo?.metaDescription ||
+      "Discover Star Light Co. artisanal cold-processed luxury soaps. Hand-poured with sacred Dragon's Blood resin, organic botanical extracts, and nourishing plant lipids."
+  );
+  const [seoKeywords, setSeoKeywords] = useState(
+    siteSettings?.seo?.metaKeywords ||
+      "artisan soap, cold process soap, dragon's blood soap, luxury soap bar, organic handmade soap, ayurvedic soap"
+  );
+  const [seoOrgName, setSeoOrgName] = useState(siteSettings?.seo?.organizationName || "Star Light Co.");
+  const [seoBrandTagline, setSeoBrandTagline] = useState(
+    siteSettings?.seo?.brandTagline || "Luxury Cold-Process Soaps & Botanical Skincare"
+  );
+  const [seoPhone, setSeoPhone] = useState(siteSettings?.seo?.storeTelephone || "+91 98765 43210");
+  const [seoEmail, setSeoEmail] = useState(siteSettings?.seo?.storeEmail || "orders@starlight.co.in");
+  const [seoPriceRange, setSeoPriceRange] = useState(siteSettings?.seo?.priceRange || "₹299 - ₹2499");
+  const [seoCustomEnabled, setSeoCustomEnabled] = useState(siteSettings?.seo?.enableCustomSchema ?? false);
+  const [seoCustomJson, setSeoCustomJson] = useState(siteSettings?.seo?.customSchemaJson || "");
+  const [seoValidationMessage, setSeoValidationMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [isSavingSeo, setIsSavingSeo] = useState(false);
+
+  // CMS State: Rituals & Philosophy
+  const [ritualTag, setRitualTag] = useState(siteSettings?.ritualSection?.tag || "The Star Light Standard");
+  const [ritualTitle, setRitualTitle] = useState(siteSettings?.ritualSection?.title || "The Art of True Cold-Process Saponification");
+  const [ritualSubtitle, setRitualSubtitle] = useState(siteSettings?.ritualSection?.subtitle || "");
+  const [ritualPillars, setRitualPillars] = useState<Array<{ id?: string; iconName?: string; title: string; desc: string }>>(
+    siteSettings?.ritualSection?.pillars || []
+  );
+  const [isSavingRituals, setIsSavingRituals] = useState(false);
+
+  // CMS State: Skin Stories & Reviews
+  const [reviewsTag, setReviewsTag] = useState(siteSettings?.reviewsSection?.tag || "Tested & Loved");
+  const [reviewsTitle, setReviewsTitle] = useState(siteSettings?.reviewsSection?.title || "Skin Stories from Our Community");
+  const [reviewsSubtitle, setReviewsSubtitle] = useState(siteSettings?.reviewsSection?.subtitle || "");
+  const [customerReviews, setCustomerReviews] = useState<Array<{
+    id?: string;
+    name: string;
+    location: string;
+    verified: boolean;
+    soapPurchased: string;
+    rating: number;
+    review: string;
+    initials?: string;
+  }>>(siteSettings?.reviewsSection?.reviews || []);
+  const [isSavingReviews, setIsSavingReviews] = useState(false);
+
+  useEffect(() => {
+    if (siteSettings) {
+      setMaintMode(siteSettings.maintenanceMode ?? false);
+      setMaintMsg(siteSettings.maintenanceMessage || "");
+      setWhatsappNum(siteSettings.whatsappNumber || "919876543210");
+      setContactPh(siteSettings.contactPhone || "+91 98765 43210");
+      setContactEm(siteSettings.contactEmail || "care@starlightsoaps.com");
+      if (siteSettings.socialLinks) {
+        setSocialInsta(siteSettings.socialLinks.instagram || "https://instagram.com/starlightsoaps");
+        setSocialFb(siteSettings.socialLinks.facebook || "https://facebook.com/starlightsoaps");
+        setSocialTwitter(siteSettings.socialLinks.twitter || "https://x.com/starlightsoaps");
+      }
+      if (siteSettings.seo) {
+        setSeoTitle(siteSettings.seo.metaTitle || "STAR LIGHT CO. | Luxury Handcrafted Cold-Process Artisanal Soaps");
+        setSeoDesc(siteSettings.seo.metaDescription || "Discover Star Light Co. artisanal cold-processed luxury soaps. Hand-poured with sacred Dragon's Blood resin, organic botanical extracts, and nourishing plant lipids.");
+        setSeoKeywords(siteSettings.seo.metaKeywords || "artisan soap, cold process soap, dragon's blood soap, luxury soap bar, organic handmade soap, ayurvedic soap");
+        setSeoOrgName(siteSettings.seo.organizationName || "Star Light Co.");
+        setSeoBrandTagline(siteSettings.seo.brandTagline || "Luxury Cold-Process Soaps & Botanical Skincare");
+        setSeoPhone(siteSettings.seo.storeTelephone || "+91 98765 43210");
+        setSeoEmail(siteSettings.seo.storeEmail || "orders@starlight.co.in");
+        setSeoPriceRange(siteSettings.seo.priceRange || "₹299 - ₹2499");
+        setSeoCustomEnabled(siteSettings.seo.enableCustomSchema ?? false);
+        setSeoCustomJson(siteSettings.seo.customSchemaJson || "");
+      }
+      if (siteSettings.ritualSection) {
+        setRitualTag(siteSettings.ritualSection.tag || "The Star Light Standard");
+        setRitualTitle(siteSettings.ritualSection.title || "The Art of True Cold-Process Saponification");
+        setRitualSubtitle(siteSettings.ritualSection.subtitle || "");
+        setRitualPillars(siteSettings.ritualSection.pillars || []);
+      }
+      if (siteSettings.reviewsSection) {
+        setReviewsTag(siteSettings.reviewsSection.tag || "Tested & Loved");
+        setReviewsTitle(siteSettings.reviewsSection.title || "Skin Stories from Our Community");
+        setReviewsSubtitle(siteSettings.reviewsSection.subtitle || "");
+        setCustomerReviews(siteSettings.reviewsSection.reviews || []);
+      }
+    }
+  }, [siteSettings]);
+
 
   // Mobile sidebar drawer state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -123,6 +253,124 @@ export default function AdminPage() {
     confirmLabel: string;
     onConfirm: () => void;
   } | null>(null);
+
+  // Promotional Offers Management State
+  const [editingPrimaryBarIdx, setEditingPrimaryBarIdx] = useState<number | null>(null);
+  const [editingSecondaryBarIdx, setEditingSecondaryBarIdx] = useState<number | null>(null);
+  const [selectedPrimaryCatalogId, setSelectedPrimaryCatalogId] = useState<string>("");
+  const [selectedSecondaryCatalogId, setSelectedSecondaryCatalogId] = useState<string>("");
+  const [showAddPrimaryCustom, setShowAddPrimaryCustom] = useState(false);
+  const [showAddSecondaryCustom, setShowAddSecondaryCustom] = useState(false);
+
+  const [newPrimaryCustomBar, setNewPrimaryCustomBar] = useState<OfferBarItem>({
+    id: "bar-custom-primary",
+    name: "New Keepsake Artisanal Bar",
+    aroma: "Balsam Fir, Pine Needle & 24k Gold",
+    benefit: "Pure radiance and skin renewal",
+    lather: "Dense Velvet Foam",
+    botanical: "24K Cosmetic Gold & Botanical Oils",
+    weight: "120g Bar",
+    image: CLOUDINARY_IMAGES.dragonsBlood,
+  });
+
+  const [newSecondaryCustomBar, setNewSecondaryCustomBar] = useState<OfferBarItem>({
+    id: "bar-custom-secondary",
+    name: "New Ayurvedic Formulation Bar",
+    aroma: "Kashmiri Saffron, Raw Honey & Goat Milk",
+    benefit: "Imparts golden radiance & restores moisture barrier",
+    lather: "Creamy Custard Lather",
+    botanical: "Grade A Saffron & Fresh Farm Milk",
+    weight: "125g Bar",
+    image: CLOUDINARY_IMAGES.saffronHoney,
+  });
+
+  const handleAddCatalogProductToPrimary = (productId: string) => {
+    if (!productId) return;
+    const found = products.find((p) => (p.id || (p as any)._id) === productId);
+    if (!found) return;
+    const newBar: OfferBarItem = {
+      id: `bar-${Date.now()}`,
+      name: found.name,
+      aroma: found.fragranceNotes?.length ? found.fragranceNotes.join(", ") : "Botanical aromatic oils",
+      benefit: found.soapBenefits?.length ? found.soapBenefits[0] : (found.tagline || found.skinType || "Replenishes skin radiance"),
+      lather: "Velvet Cream Lather",
+      botanical: found.keyIngredients?.length ? found.keyIngredients.join(", ") : "Cold-pressed botanical oils",
+      weight: found.weight || "120g Bar",
+      image: found.image || CLOUDINARY_IMAGES.dragonsBlood,
+    };
+    const updatedBars = [...(primaryOffer.bars || []), newBar];
+    updatePrimaryOffer({ bars: updatedBars });
+    setSelectedPrimaryCatalogId("");
+    showNotification(`Added "${found.name}" to Offer 01 Vault Curation! ✨`);
+  };
+
+  const handleAddCatalogProductToSecondary = (productId: string) => {
+    if (!productId) return;
+    const found = products.find((p) => (p.id || (p as any)._id) === productId);
+    if (!found) return;
+    const newBar: OfferBarItem = {
+      id: `bar-${Date.now()}`,
+      name: found.name,
+      aroma: found.fragranceNotes?.length ? found.fragranceNotes.join(", ") : "Kashmiri saffron & floral notes",
+      benefit: found.soapBenefits?.length ? found.soapBenefits[0] : (found.tagline || found.skinType || "Deeply restores and nourishes skin"),
+      lather: "Dense Velvet Foam",
+      botanical: found.keyIngredients?.length ? found.keyIngredients.join(", ") : "Ayurvedic herbs & raw honey",
+      weight: found.weight || "125g Bar",
+      image: found.image || CLOUDINARY_IMAGES.saffronHoney,
+    };
+    const updatedBars = [...(secondaryOffer.bars || []), newBar];
+    updateSecondaryOffer({ bars: updatedBars });
+    setSelectedSecondaryCatalogId("");
+    showNotification(`Added "${found.name}" to Offer 02 Ayurvedic Curation! ✨`);
+  };
+
+  const handleRemovePrimaryBar = (index: number) => {
+    const bars = (primaryOffer.bars || []).filter((_, i) => i !== index);
+    updatePrimaryOffer({ bars });
+    if (editingPrimaryBarIdx === index) setEditingPrimaryBarIdx(null);
+    showNotification("Removed product from Offer 01.");
+  };
+
+  const handleRemoveSecondaryBar = (index: number) => {
+    const bars = (secondaryOffer.bars || []).filter((_, i) => i !== index);
+    updateSecondaryOffer({ bars });
+    if (editingSecondaryBarIdx === index) setEditingSecondaryBarIdx(null);
+    showNotification("Removed product from Offer 02.");
+  };
+
+  const handleUpdatePrimaryBar = (index: number, updated: Partial<OfferBarItem>) => {
+    const bars = [...(primaryOffer.bars || [])];
+    if (!bars[index]) return;
+    bars[index] = { ...bars[index], ...updated };
+    updatePrimaryOffer({ bars });
+  };
+
+  const handleUpdateSecondaryBar = (index: number, updated: Partial<OfferBarItem>) => {
+    const bars = [...(secondaryOffer.bars || [])];
+    if (!bars[index]) return;
+    bars[index] = { ...bars[index], ...updated };
+    updateSecondaryOffer({ bars });
+  };
+
+  const handleMovePrimaryBar = (index: number, direction: "up" | "down") => {
+    const bars = [...(primaryOffer.bars || [])];
+    const targetIdx = direction === "up" ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= bars.length) return;
+    const temp = bars[index];
+    bars[index] = bars[targetIdx];
+    bars[targetIdx] = temp;
+    updatePrimaryOffer({ bars });
+  };
+
+  const handleMoveSecondaryBar = (index: number, direction: "up" | "down") => {
+    const bars = [...(secondaryOffer.bars || [])];
+    const targetIdx = direction === "up" ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= bars.length) return;
+    const temp = bars[index];
+    bars[index] = bars[targetIdx];
+    bars[targetIdx] = temp;
+    updateSecondaryOffer({ bars });
+  };
 
   // Fix: Prevent mouse wheel from auto-changing number input values
   useEffect(() => {
@@ -169,7 +417,7 @@ export default function AdminPage() {
   const [prodBenefits, setProdBenefits] = useState("");
   const [prodIngredients, setProdIngredients] = useState("");
   const [prodRitual, setProdRitual] = useState("");
-  const [prodImage, setProdImage] = useState("/images/products/dragons-blood.jpg");
+  const [prodImage, setProdImage] = useState(CLOUDINARY_IMAGES.dragonsBlood);
   const [prodBadge, setProdBadge] = useState("");
   const [prodInStock, setProdInStock] = useState(true);
   const [prodIsBestseller, setProdIsBestseller] = useState(false);
@@ -190,8 +438,8 @@ export default function AdminPage() {
   const [catSlug, setCatSlug] = useState("");
   const [catDescription, setCatDescription] = useState("");
   const [catParentCategory, setCatParentCategory] = useState("");
-  const [catImage, setCatImage] = useState("/images/products/dragons-blood.jpg");
-  const [catBannerImage, setCatBannerImage] = useState("/images/products/dragons-blood.jpg");
+  const [catImage, setCatImage] = useState(CLOUDINARY_IMAGES.dragonsBlood);
+  const [catBannerImage, setCatBannerImage] = useState(CLOUDINARY_IMAGES.dragonsBlood);
   const [catBannerHeadline, setCatBannerHeadline] = useState("");
   const [catBannerSubheadline, setCatBannerSubheadline] = useState("");
   const [catBadge, setCatBadge] = useState("");
@@ -210,19 +458,64 @@ export default function AdminPage() {
   const [freeThresholdInput, setFreeThresholdInput] = useState(shippingSettings?.freeShippingThreshold ?? 999);
   const [enableFreeThresholdInput, setEnableFreeThresholdInput] = useState(shippingSettings?.enableFreeThreshold ?? true);
   const [defaultStateRateInput, setDefaultStateRateInput] = useState(shippingSettings?.defaultStateRate ?? 99);
-  const [stateRatesInput, setStateRatesInput] = useState<Record<string, number>>(shippingSettings?.stateRates ?? {});
+  const [stateRatesInput, setStateRatesInput] = useState<Record<string, number>>(
+    shippingSettings?.stateRates && Object.keys(shippingSettings.stateRates).length > 0
+      ? shippingSettings.stateRates
+      : (DEFAULT_SHIPPING_SETTINGS.stateRates || {})
+  );
   const [stateSearchFilter, setStateSearchFilter] = useState("");
+  const [selectedNewState, setSelectedNewState] = useState("");
+  const [newStateRateInput, setNewStateRateInput] = useState<number>(79);
 
   useEffect(() => {
     if (shippingSettings) {
-      setShippingTypeInput(shippingSettings.shippingType || "flat");
+      setShippingTypeInput(shippingSettings.shippingType || "state_wise");
       setFlatRateInput(shippingSettings.flatRate);
       setFreeThresholdInput(shippingSettings.freeShippingThreshold);
       setEnableFreeThresholdInput(shippingSettings.enableFreeThreshold);
       setDefaultStateRateInput(shippingSettings.defaultStateRate);
-      setStateRatesInput(shippingSettings.stateRates || {});
+      if (shippingSettings.stateRates && Object.keys(shippingSettings.stateRates).length > 0) {
+        setStateRatesInput(shippingSettings.stateRates);
+      } else {
+        setStateRatesInput(DEFAULT_SHIPPING_SETTINGS.stateRates || {});
+      }
     }
   }, [shippingSettings]);
+
+  const handleAddStateRate = () => {
+    const stName = selectedNewState.trim();
+    if (!stName) {
+      showNotification("Please select or enter a state name.", "error");
+      return;
+    }
+    setStateRatesInput((prev) => ({
+      ...prev,
+      [stName]: Number(newStateRateInput) >= 0 ? Number(newStateRateInput) : 79,
+    }));
+    showNotification(`Added ${stName} delivery rate: ₹${newStateRateInput}! ✨`);
+    setSelectedNewState("");
+  };
+
+  const handlePopulateAllStates = () => {
+    const defaults = DEFAULT_SHIPPING_SETTINGS.stateRates || {};
+    const updated = { ...stateRatesInput };
+    INDIAN_STATES.forEach((st) => {
+      if (updated[st] === undefined) {
+        updated[st] = defaults[st] !== undefined ? defaults[st] : (defaultStateRateInput || 99);
+      }
+    });
+    setStateRatesInput(updated);
+    showNotification(`Populated all ${INDIAN_STATES.length} Indian States & Union Territories! ✨`);
+  };
+
+  const handleRemoveStateRate = (st: string) => {
+    setStateRatesInput((prev) => {
+      const next = { ...prev };
+      delete next[st];
+      return next;
+    });
+    showNotification(`Removed custom rate for ${st}.`);
+  };
 
   // Hero Slide Form State
   const [isHeroModalOpen, setIsHeroModalOpen] = useState(false);
@@ -230,7 +523,7 @@ export default function AdminPage() {
   const [heroFormHeadline, setHeroFormHeadline] = useState("");
   const [heroFormSubheadline, setHeroFormSubheadline] = useState("");
   const [heroFormDescription, setHeroFormDescription] = useState("");
-  const [heroFormImage, setHeroFormImage] = useState("/images/products/dragons-blood.jpg");
+  const [heroFormImage, setHeroFormImage] = useState(CLOUDINARY_IMAGES.dragonsBlood);
   const [heroFormImageAlt, setHeroFormImageAlt] = useState("");
   const [heroFormBadge, setHeroFormBadge] = useState("Best Seller");
   const [heroFormCtaText, setHeroFormCtaText] = useState("Claim Your Bar");
@@ -243,7 +536,7 @@ export default function AdminPage() {
     setHeroFormHeadline("");
     setHeroFormSubheadline("");
     setHeroFormDescription("");
-    setHeroFormImage(PRESET_IMAGES[0]?.url || "/images/products/dragons-blood.jpg");
+    setHeroFormImage(PRESET_IMAGES[0]?.url || CLOUDINARY_IMAGES.dragonsBlood);
     setHeroFormImageAlt("");
     setHeroFormBadge("Signature");
     setHeroFormCtaText("Claim Your Bar");
@@ -531,7 +824,7 @@ export default function AdminPage() {
   };
 
   // Save Product
-  const handleSaveProduct = (e?: React.FormEvent) => {
+  const handleSaveProduct = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     if (!prodName.trim()) {
@@ -549,25 +842,25 @@ export default function AdminPage() {
       name: prodName.trim(),
       slug: (prodSlug || slugify(prodName)).trim(),
       tagline: prodTagline.trim(),
-      mainCategory: prodCategory,
+      mainCategory: prodCategory || categories[0]?.name || "Face & Gentle Cleansing",
       subCategory: prodSubCategory.trim(),
-      price: Number(prodPrice),
+      price: Number(prodPrice) || 499,
       originalPrice: prodOriginalPrice ? Number(prodOriginalPrice) : undefined,
       weight: calculatedWeightText,
       weightValue: Number(prodWeightValue),
       weightUnit: prodWeightUnit,
       taxType: prodTaxType,
       taxRate: Number(prodTaxRate),
-      description: prodDescription.trim(),
-      cureTime: prodCureTime.trim(),
-      skinType: prodSkinType.trim(),
+      description: prodDescription.trim() || "Artisanal cold-process botanical bar crafted with pure therapeutic botanicals.",
+      cureTime: prodCureTime.trim() || "Cold Cured 6 Weeks",
+      skinType: prodSkinType.trim() || "All Skin Types • Gentle",
       scentPyramid: editingProductId
         ? products.find((p) => (p.id || (p as any)._id) === editingProductId)?.scentPyramid
         : undefined,
       soapBenefits: prodBenefits.split("\n").map((s) => s.trim()).filter(Boolean),
       fullIngredients: prodIngredients.split(",").map((s) => s.trim()).filter(Boolean),
       ritualHowToUse: prodRitual.trim(),
-      image: prodImage,
+      image: prodImage || PRESET_IMAGES[0].url,
       badge: prodBadge.trim() || undefined,
       inStock: prodInStock,
       isBestseller: prodIsBestseller,
@@ -577,15 +870,22 @@ export default function AdminPage() {
       metaKeywords: prodMetaKeywords.trim() || undefined,
     };
 
-    if (editingProductId) {
-      updateProduct(editingProductId, productPayload as any);
-      showNotification(`"${prodName}" updated successfully!`);
-    } else {
-      addProduct(productPayload as any);
-      showNotification(`"${prodName}" added to catalog!`);
+    try {
+      setIsSavingProduct(true);
+      if (editingProductId) {
+        await updateProduct(editingProductId, productPayload as any);
+        showNotification(`"${prodName}" updated successfully!`);
+      } else {
+        await addProduct(productPayload as any);
+        showNotification(`"${prodName}" added to catalog!`);
+      }
+      setIsProductEditing(false);
+    } catch (err: any) {
+      console.error("Save product error:", err);
+      showNotification(err.message || "Failed to save product. Ensure you are signed in as administrator.", "error");
+    } finally {
+      setIsSavingProduct(false);
     }
-
-    setIsProductEditing(false);
   };
 
   // Open Full-Page Category Form for Add
@@ -619,7 +919,7 @@ export default function AdminPage() {
     setCatParentCategory(cat.parentCategory || "");
     setCatBadge(cat.badge || "");
     setCatSubcategories((cat.subcategories || []).join(", "));
-    setCatImage(cat.image || "/images/products/dragons-blood.jpg");
+    setCatImage(cat.image || CLOUDINARY_IMAGES.dragonsBlood);
     setCatBannerImage(cat.bannerImage || cat.image || PRESET_IMAGES[0].url);
     setCatBannerHeadline(cat.bannerHeadline || cat.name || "");
     setCatBannerSubheadline(cat.bannerSubheadline || cat.description || "");
@@ -631,7 +931,7 @@ export default function AdminPage() {
   };
 
   // Save Category
-  const handleSaveCategory = (e?: React.FormEvent) => {
+  const handleSaveCategory = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!catName.trim()) {
       showNotification("Please enter a category name.", "error");
@@ -651,31 +951,38 @@ export default function AdminPage() {
     const payload = {
       name: catName.trim(),
       slug,
-      description: catDescription.trim() || undefined,
+      description: catDescription.trim() || `${catName.trim()} artisanal handcrafted cold-process soaps.`,
       parentCategory: catParentCategory.trim() || null,
-      image: catImage,
-      bannerImage: catBannerImage || catImage,
+      image: catImage || PRESET_IMAGES[0].url,
+      bannerImage: catBannerImage || catImage || PRESET_IMAGES[0].url,
       bannerHeadline: catBannerHeadline.trim() || undefined,
       bannerSubheadline: catBannerSubheadline.trim() || undefined,
-      badge: catBadge.trim() || undefined,
+      badge: catBadge.trim() || "Signature",
       subcategories: subCats,
       metaTitle: catMetaTitle.trim() || undefined,
       metaDescription: catMetaDescription.trim() || undefined,
       metaKeywords: keywordsArray,
     };
 
-    if (editingCategoryId) {
-      updateCategory(editingCategoryId, payload);
-      showNotification(`Category "${catName}" updated.`);
-    } else {
-      addCategory({
-        id: slug,
-        ...payload,
-      });
-      showNotification(`Category "${catName}" created.`);
+    try {
+      setIsSavingCategory(true);
+      if (editingCategoryId) {
+        await updateCategory(editingCategoryId, payload);
+        showNotification(`Category "${catName}" updated.`);
+      } else {
+        await addCategory({
+          id: slug,
+          ...payload,
+        });
+        showNotification(`Category "${catName}" created.`);
+      }
+      setIsCategoryEditing(false);
+    } catch (err: any) {
+      console.error("Save category error:", err);
+      showNotification(err.message || "Failed to save category. Ensure you are signed in as administrator.", "error");
+    } finally {
+      setIsSavingCategory(false);
     }
-
-    setIsCategoryEditing(false);
   };
 
   // Save Shipping Settings
@@ -773,7 +1080,6 @@ export default function AdminPage() {
     prodTaxType === "exclusive" ? Math.round((prodPrice * (prodTaxRate || 0)) / 100) : 0;
   const previewCustomerTotal = prodPrice + previewTaxAmt;
 
-  // Clear, standard e-commerce navigation items
   const NAV_ITEMS = [
     { id: "overview", label: "Dashboard", icon: Sparkles, badge: null },
     { id: "products", label: "Products", icon: Package, badge: (products || []).length },
@@ -783,7 +1089,204 @@ export default function AdminPage() {
     { id: "offers", label: "Discounts & Offers", icon: Gift, badge: 2 },
     { id: "orders", label: "Orders", icon: ShoppingBag, badge: (orders || []).length },
     { id: "users", label: "Customers", icon: Users, badge: (users || []).length },
+    {
+      id: "settings",
+      label: "Settings & Maintenance",
+      icon: ShieldAlert,
+      badge: maintMode ? "ON" : null,
+    },
+    { id: "seo", label: "SEO & Schema", icon: Globe, badge: "SEO" },
+    { id: "rituals", label: "Rituals & Philosophy", icon: Sparkles, badge: null },
+    { id: "reviews", label: "Skin Stories & Reviews", icon: Star, badge: null },
   ];
+
+
+  if (isLoaded && currentUser?.role !== "admin") {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          backgroundColor: "#0d131f",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1.5rem",
+          color: "#ffffff",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "460px",
+            width: "100%",
+            backgroundColor: "#161f30",
+            borderRadius: "20px",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+            padding: "2.5rem 2rem",
+            boxShadow: "0 25px 60px rgba(0, 0, 0, 0.5)",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "60px",
+              height: "60px",
+              borderRadius: "16px",
+              backgroundColor: "var(--color-terracotta)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 1.25rem",
+              boxShadow: "0 8px 24px var(--color-terracotta-glow)",
+            }}
+          >
+            <Sparkles size={30} color="#ffffff" />
+          </div>
+
+          <span
+            style={{
+              fontSize: "0.74rem",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "var(--color-terracotta)",
+              display: "block",
+              marginBottom: "0.4rem",
+            }}
+          >
+            Store Administration Portal
+          </span>
+
+          <h2
+            style={{
+              fontFamily: "var(--font-serif, serif)",
+              fontSize: "1.75rem",
+              fontWeight: 800,
+              color: "#ffffff",
+              marginBottom: "0.75rem",
+            }}
+          >
+            Star Light Co.
+          </h2>
+
+          <p
+            style={{
+              fontSize: "0.85rem",
+              color: "#94a3b8",
+              marginBottom: "1.75rem",
+              lineHeight: 1.5,
+            }}
+          >
+            Please sign in with administrator credentials to manage products, categories, orders, and delivery settings.
+          </p>
+
+          {adminAuthError && (
+            <div
+              style={{
+                backgroundColor: "rgba(220, 38, 38, 0.15)",
+                border: "1px solid #ef4444",
+                borderRadius: "10px",
+                padding: "0.75rem",
+                color: "#fca5a5",
+                fontSize: "0.82rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "1.25rem",
+                textAlign: "left",
+              }}
+            >
+              <AlertCircle size={16} />
+              <span>{adminAuthError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleAdminQuickLogin} style={{ display: "flex", flexDirection: "column", gap: "1rem", textAlign: "left" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#cbd5e1", marginBottom: "0.35rem" }}>
+                Admin Email
+              </label>
+              <input
+                type="email"
+                value={adminAuthEmail}
+                onChange={(e) => setAdminAuthEmail(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "10px",
+                  backgroundColor: "#0d131f",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  color: "#ffffff",
+                  fontSize: "0.9rem",
+                  outline: "none",
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#cbd5e1", marginBottom: "0.35rem" }}>
+                Admin Password
+              </label>
+              <input
+                type="password"
+                value={adminAuthPassword}
+                onChange={(e) => setAdminAuthPassword(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "10px",
+                  backgroundColor: "#0d131f",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  color: "#ffffff",
+                  fontSize: "0.9rem",
+                  outline: "none",
+                }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoggingInAdmin}
+              style={{
+                width: "100%",
+                padding: "0.85rem",
+                borderRadius: "10px",
+                backgroundColor: "var(--color-terracotta)",
+                color: "#ffffff",
+                fontWeight: 700,
+                fontSize: "0.95rem",
+                border: "none",
+                cursor: isLoggingInAdmin ? "wait" : "pointer",
+                boxShadow: "0 4px 16px var(--color-terracotta-glow)",
+                marginTop: "0.5rem",
+                transition: "all 0.2s ease",
+              }}
+            >
+              {isLoggingInAdmin ? "Verifying Credentials..." : "Unlock Admin Dashboard"}
+            </button>
+          </form>
+
+          <div
+            style={{
+              marginTop: "1.5rem",
+              paddingTop: "1.25rem",
+              borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.8rem",
+            }}
+          >
+            <span style={{ color: "#64748b" }}>Preset: admin@starlight.com</span>
+            <Link href="/" style={{ color: "var(--color-terracotta)", textDecoration: "none", fontWeight: 600 }}>
+              &larr; Back to Store
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-dashboard-layout">
@@ -890,58 +1393,86 @@ export default function AdminPage() {
       {/* ============================================================ */}
       <aside className={`admin-sidebar ${isSidebarOpen ? "open" : ""}`}>
         {/* Brand Header */}
-        <div
-          style={{
-            padding: "1.25rem 1.4rem",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div className="admin-sidebar-header">
+          <Link
+            href="/"
+            target="_blank"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              textDecoration: "none",
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
             <div
               style={{
-                width: "36px",
-                height: "36px",
+                width: "42px",
+                height: "42px",
                 borderRadius: "10px",
-                backgroundColor: "var(--color-terracotta)",
+                backgroundColor: "#ffffff",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 4px 12px var(--color-terracotta-glow)",
+                boxShadow: "0 2px 10px rgba(0, 0, 0, 0.35)",
+                border: "1.5px solid rgba(197, 160, 89, 0.45)",
+                flexShrink: 0,
+                padding: "3px",
+                overflow: "hidden",
               }}
             >
-              <Sparkles size={18} color="#ffffff" />
+              <Image
+                src={CLOUDINARY_IMAGES.logo}
+                alt="Star Light Co."
+                width={36}
+                height={36}
+                style={{ objectFit: "contain", width: "auto", height: "auto" }}
+                priority
+              />
             </div>
-            <div>
-              <div style={{ fontFamily: "var(--font-serif)", fontWeight: 800, fontSize: "1.05rem", color: "#ffffff", letterSpacing: "0.02em" }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontFamily: "var(--font-serif)",
+                  fontWeight: 800,
+                  fontSize: "1.05rem",
+                  color: "#ffffff",
+                  letterSpacing: "0.02em",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 STAR LIGHT CO.
               </div>
-              <div style={{ fontSize: "0.7rem", color: "var(--color-terracotta)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              <div
+                style={{
+                  fontSize: "0.68rem",
+                  color: "var(--color-terracotta)",
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  whiteSpace: "nowrap",
+                }}
+              >
                 Store Backoffice
               </div>
             </div>
-          </div>
+          </Link>
 
           <button
             type="button"
             onClick={() => setIsSidebarOpen(false)}
-            style={{
-              display: "inline-flex",
-              color: "#a1a1aa",
-              padding: "4px",
-              borderRadius: "6px",
-              background: "rgba(255,255,255,0.06)",
-            }}
-            className="mobile-only-close"
+            className="admin-mobile-only-close"
+            aria-label="Close Sidebar"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Storefront Link */}
-        <div style={{ padding: "0.75rem 1.4rem", borderBottom: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="admin-sidebar-storefront">
           <span style={{ fontSize: "0.74rem", color: "#a1a1aa", display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#22c55e", boxShadow: "0 0 8px #22c55e" }} />
             Storefront Online
@@ -956,7 +1487,7 @@ export default function AdminPage() {
         </div>
 
         {/* Navigation Items */}
-        <nav style={{ padding: "1rem 0.75rem", flexGrow: 1, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+        <nav className="admin-sidebar-nav">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id && !isProductEditing && !isCategoryEditing;
@@ -1012,60 +1543,56 @@ export default function AdminPage() {
         </nav>
 
         {/* Bottom Actions */}
-        <div style={{ padding: "1.1rem 1rem", borderTop: "1px solid rgba(255, 255, 255, 0.08)", backgroundColor: "rgba(0,0,0,0.2)" }}>
-          <button
-            type="button"
-            onClick={() => {
-              setConfirmModal({
-                title: "Reset Store to Factory Defaults",
-                message: "Are you sure you want to reset all products, categories, shipping rates, and orders to seed data?",
-                confirmLabel: "Reset Store",
-                onConfirm: () => {
-                  resetToDefaults();
-                  showNotification("Store reset to factory default data.");
-                },
-              });
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              width: "100%",
-              padding: "0.55rem 0.85rem",
-              borderRadius: "8px",
-              backgroundColor: "rgba(255, 255, 255, 0.05)",
-              color: "#a1a1aa",
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              cursor: "pointer",
-              marginBottom: "0.85rem",
-            }}
-          >
-            <RefreshCw size={13} /> Reset Factory Seed
-          </button>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", padding: "0.4rem 0.2rem" }}>
-            <div
-              style={{
-                width: "32px",
-                height: "32px",
-                borderRadius: "50%",
-                backgroundColor: "var(--color-terracotta)",
-                color: "#ffffff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 700,
-                fontSize: "0.85rem",
+        <div className="admin-sidebar-footer">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.65rem", padding: "0.2rem 0.1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", minWidth: 0 }}>
+              <div
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  backgroundColor: "var(--color-terracotta)",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                  fontSize: "0.85rem",
+                  flexShrink: 0,
+                }}
+              >
+                {currentUser?.name?.[0]?.toUpperCase() || "A"}
+              </div>
+              <div style={{ minWidth: 0, overflow: "hidden" }}>
+                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {currentUser?.name || "Store Admin"}
+                </div>
+                <div style={{ fontSize: "0.7rem", color: "#8e8e93", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {currentUser?.email || "admin@starlight.com"}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await logoutUser();
+                showNotification("Signed out from administrator session.");
               }}
+              style={{
+                background: "rgba(239, 68, 68, 0.15)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                color: "#fca5a5",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.7rem",
+                padding: "4px 8px",
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+              title="Sign Out"
             >
-              A
-            </div>
-            <div>
-              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#ffffff" }}>Store Admin</div>
-              <div style={{ fontSize: "0.7rem", color: "#8e8e93" }}>Manager Profile</div>
-            </div>
+              Sign Out
+            </button>
           </div>
         </div>
       </aside>
@@ -1080,16 +1607,7 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={() => setIsSidebarOpen(true)}
-              style={{
-                padding: "6px 8px",
-                borderRadius: "8px",
-                border: "1px solid var(--color-border)",
-                backgroundColor: "var(--color-cream-bg)",
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+              className="admin-appbar-hamburger"
               aria-label="Open Admin Menu"
             >
               <Menu size={20} color="var(--color-dragon-black)" />
@@ -1136,7 +1654,14 @@ export default function AdminPage() {
                   ? "Discounts & Promotional Offers"
                   : activeTab === "orders"
                   ? `Customer Orders (${(orders || []).length})`
-                  : `Customer Directory (${(users || []).length})`}
+                  : activeTab === "users"
+                  ? `Customer Directory (${(users || []).length})`
+                  : activeTab === "settings"
+                  ? "Store Settings & Maintenance Mode"
+                  : activeTab === "rituals"
+                  ? "Cold-Process Philosophy & Rituals CMS"
+                  : "Skin Stories & Verified Reviews CMS"}
+
               </h1>
             </div>
           </div>
@@ -1656,7 +2181,7 @@ export default function AdminPage() {
                         type="text"
                         value={prodImage}
                         onChange={(e) => setProdImage(e.target.value)}
-                        placeholder="https://... or /images/products/..."
+                        placeholder="https://res.cloudinary.com/... or image URL"
                         style={{ width: "100%", padding: "0.65rem 0.85rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
                       />
                     </div>
@@ -1666,10 +2191,12 @@ export default function AdminPage() {
                       <ImageUpload
                         currentImage={prodImage}
                         folder="starlight/products"
-                        label="Upload High-Resolution Product Image (Cloudinary)"
+                        label={`Upload High-Resolution Product Image (${prodName || "Artisanal Soap"})`}
+                        imageAlt={prodName || "Artisanal Soap Bar"}
+                        altText={prodName || ""}
                         onUpload={(url) => {
                           setProdImage(url);
-                          showNotification("Image uploaded to Cloudinary successfully!");
+                          showNotification(`Uploaded image for "${prodName || "Product"}" to Cloudinary! ✨`);
                         }}
                       />
                     </div>
@@ -1677,10 +2204,10 @@ export default function AdminPage() {
                     {/* Live Preview Card */}
                     <div style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "1rem", borderRadius: "10px", border: "1px solid var(--color-border)", backgroundColor: "#ffffff" }}>
                       <div style={{ position: "relative", width: "65px", height: "65px", borderRadius: "10px", overflow: "hidden", backgroundColor: "var(--color-cream-subtle)", flexShrink: 0 }}>
-                        <Image src={prodImage} alt="Preview" fill sizes="65px" style={{ objectFit: "cover" }} />
+                        <Image src={prodImage} alt={prodName || "Preview"} fill sizes="65px" style={{ objectFit: "cover" }} />
                       </div>
                       <div>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 700 }}>Active Image Assigned</div>
+                        <div style={{ fontSize: "0.88rem", fontWeight: 700 }}>{prodName ? `${prodName} Image` : "Active Image Assigned"}</div>
                         <div style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", wordBreak: "break-all" }}>{prodImage}</div>
                       </div>
                     </div>
@@ -1930,7 +2457,7 @@ export default function AdminPage() {
                       {/* Live Image Preview */}
                       <div style={{ width: "110px", height: "110px", borderRadius: "10px", overflow: "hidden", border: "2px solid var(--color-terracotta)", flexShrink: 0, backgroundColor: "#ffffff" }}>
                         <Image
-                          src={catImage || "/images/products/dragons-blood.jpg"}
+                          src={catImage || CLOUDINARY_IMAGES.dragonsBlood}
                           alt="Category preview"
                           width={110}
                           height={110}
@@ -1976,7 +2503,7 @@ export default function AdminPage() {
                             type="text"
                             value={catImage}
                             onChange={(e) => setCatImage(e.target.value)}
-                            placeholder="https://... or /images/products/..."
+                            placeholder="https://res.cloudinary.com/... or image URL"
                             style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.85rem" }}
                           />
                         </div>
@@ -3046,7 +3573,7 @@ export default function AdminPage() {
                                 <td style={{ padding: "0.85rem 1rem" }}>
                                   <div style={{ width: "44px", height: "44px", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--color-border)", backgroundColor: "var(--color-cream-subtle)" }}>
                                     <Image
-                                      src={cat.image || "/images/products/dragons-blood.jpg"}
+                                      src={cat.image || CLOUDINARY_IMAGES.dragonsBlood}
                                       alt={cat.name}
                                       width={44}
                                       height={44}
@@ -3589,7 +4116,7 @@ export default function AdminPage() {
                                     type="text"
                                     value={heroFormImage}
                                     onChange={(e) => setHeroFormImage(e.target.value)}
-                                    placeholder="https://... or /images/..."
+                                    placeholder="https://res.cloudinary.com/... or image URL"
                                     required
                                     style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.82rem" }}
                                   />
@@ -3755,24 +4282,108 @@ export default function AdminPage() {
                     <div className="admin-table-card">
                       <div style={{ padding: "1.15rem 1.4rem", borderBottom: "1px solid var(--color-border)", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
                         <div>
-                          <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem", margin: 0 }}>
-                            State-Wise Shipping Rates ({Object.keys(stateRatesInput).length} States)
-                          </h3>
-                          <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem", margin: 0 }}>
+                              State-Wise Shipping Rates ({Object.keys(stateRatesInput).length} States)
+                            </h3>
+                            <span style={{ fontSize: "0.74rem", fontWeight: 700, padding: "2px 8px", borderRadius: "100px", backgroundColor: "rgba(225, 113, 89, 0.12)", color: "var(--color-terracotta)" }}>
+                              {Object.keys(stateRatesInput).length} / {INDIAN_STATES.length} Configured
+                            </span>
+                          </div>
+                          <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>
                             Customers are charged based on their delivery state chosen in the cart drawer.
                           </p>
                         </div>
 
-                        <div style={{ position: "relative", width: "220px" }}>
-                          <Search size={14} style={{ position: "absolute", left: "9px", top: "50%", transform: "translateY(-50%)", color: "var(--color-text-tertiary)" }} />
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={handlePopulateAllStates}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              padding: "0.45rem 0.85rem",
+                              borderRadius: "8px",
+                              backgroundColor: "var(--color-cream-subtle)",
+                              border: "1px solid var(--color-border)",
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              color: "var(--color-dragon-black)",
+                              cursor: "pointer",
+                            }}
+                            title="Auto-fill all 36 Indian states and union territories with standard rates"
+                          >
+                            <Sparkles size={14} color="var(--color-terracotta)" />
+                            Auto-Populate All 36 States
+                          </button>
+
+                          <div style={{ position: "relative", width: "200px" }}>
+                            <Search size={14} style={{ position: "absolute", left: "9px", top: "50%", transform: "translateY(-50%)", color: "var(--color-text-tertiary)" }} />
+                            <input
+                              type="text"
+                              value={stateSearchFilter}
+                              onChange={(e) => setStateSearchFilter(e.target.value)}
+                              placeholder="Filter state name..."
+                              style={{ width: "100%", padding: "0.45rem 0.65rem 0.45rem 1.9rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.8rem" }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Add State Option Bar */}
+                      <div style={{ padding: "0.85rem 1.4rem", backgroundColor: "var(--color-cream-subtle)", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
+                        <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--color-dragon-black)", display: "flex", alignItems: "center", gap: "5px" }}>
+                          <Plus size={15} /> Add State Option:
+                        </span>
+                        
+                        <div style={{ flexGrow: 1, minWidth: "220px", maxWidth: "340px" }}>
+                          <select
+                            value={selectedNewState}
+                            onChange={(e) => setSelectedNewState(e.target.value)}
+                            style={{ width: "100%", padding: "0.45rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.85rem", backgroundColor: "#ffffff" }}
+                          >
+                            <option value="">-- Choose Indian State / UT --</option>
+                            {INDIAN_STATES.map((st) => (
+                              <option key={st} value={st}>
+                                {st} {stateRatesInput[st] !== undefined ? `(Configured: ₹${stateRatesInput[st]})` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                          <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>₹</span>
                           <input
-                            type="text"
-                            value={stateSearchFilter}
-                            onChange={(e) => setStateSearchFilter(e.target.value)}
-                            placeholder="Filter state name..."
-                            style={{ width: "100%", padding: "0.45rem 0.65rem 0.45rem 1.9rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.8rem" }}
+                            type="number"
+                            min="0"
+                            value={newStateRateInput}
+                            onWheel={(e) => (e.target as HTMLElement).blur()}
+                            onChange={(e) => setNewStateRateInput(Number(e.target.value))}
+                            placeholder="Rate (₹)"
+                            style={{ width: "85px", padding: "0.45rem 0.65rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.85rem", fontWeight: 700 }}
                           />
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={handleAddStateRate}
+                          style={{
+                            padding: "0.45rem 1rem",
+                            borderRadius: "6px",
+                            backgroundColor: "var(--color-terracotta)",
+                            color: "#ffffff",
+                            border: "none",
+                            fontSize: "0.82rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                          }}
+                        >
+                          <Plus size={15} /> Add State Rate
+                        </button>
                       </div>
 
                       <div className="admin-table-scroll" style={{ maxHeight: "380px" }}>
@@ -3781,7 +4392,8 @@ export default function AdminPage() {
                             <tr style={{ backgroundColor: "var(--color-cream-subtle)", borderBottom: "1px solid var(--color-border)", fontSize: "0.75rem", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
                               <th style={{ padding: "0.75rem 1rem" }}>State / Region</th>
                               <th style={{ padding: "0.75rem 1rem" }}>Courier Rate (INR ₹)</th>
-                              <th style={{ padding: "0.75rem 1rem", textAlign: "right" }}>Status</th>
+                              <th style={{ padding: "0.75rem 1rem" }}>Status</th>
+                              <th style={{ padding: "0.75rem 1rem", textAlign: "right" }}>Action</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3808,13 +4420,57 @@ export default function AdminPage() {
                                       />
                                     </div>
                                   </td>
-                                  <td style={{ padding: "0.7rem 1rem", textAlign: "right" }}>
-                                    <span style={{ fontSize: "0.72rem", color: "var(--color-terracotta)", fontWeight: 700 }}>
-                                      Configured
+                                  <td style={{ padding: "0.7rem 1rem" }}>
+                                    <span style={{ fontSize: "0.74rem", color: "var(--color-terracotta)", fontWeight: 700, backgroundColor: "rgba(225, 113, 89, 0.1)", padding: "2px 8px", borderRadius: "4px" }}>
+                                      Active Delivery Rate
                                     </span>
+                                  </td>
+                                  <td style={{ padding: "0.7rem 1rem", textAlign: "right" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveStateRate(st)}
+                                      title={`Remove custom rate for ${st}`}
+                                      style={{ padding: "6px", border: "none", background: "transparent", color: "#dc2626", cursor: "pointer" }}
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
                                   </td>
                                 </tr>
                               ))}
+
+                            {Object.entries(stateRatesInput).length === 0 && (
+                              <tr>
+                                <td colSpan={4} style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
+                                  <div style={{ maxWidth: "380px", margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>
+                                    <span style={{ fontSize: "2rem" }}>🚚</span>
+                                    <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600 }}>No State-Wise Rates Configured</p>
+                                    <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
+                                      All orders currently default to the standard rate of ₹{defaultStateRateInput}. You can populate all 36 Indian states in one click.
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={handlePopulateAllStates}
+                                      style={{
+                                        padding: "0.55rem 1.25rem",
+                                        borderRadius: "8px",
+                                        backgroundColor: "var(--color-terracotta)",
+                                        color: "#ffffff",
+                                        border: "none",
+                                        fontSize: "0.84rem",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "6px",
+                                        marginTop: "0.25rem",
+                                      }}
+                                    >
+                                      <Sparkles size={15} /> Populate All 36 Indian States
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -3850,28 +4506,114 @@ export default function AdminPage() {
                       Promotional Offers &amp; Banners
                     </h2>
                     <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
-                      Update homepage festival collector box and secondary wellness showcase banners.
+                      Manage homepage festival collector vault and royal wellness curation offers. Add one or more products, manage botanical details, or deactivate offers to hide them from the homepage.
                     </p>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "1.5rem" }}>
-                    {/* Primary Festival Offer */}
-                    <div className="admin-card">
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: "1.75rem" }}>
+                    {/* ─────────────────────────────────────────────────────────────
+                        OFFER 01: PRIMARY FESTIVAL COLLECTOR VAULT
+                       ───────────────────────────────────────────────────────────── */}
+                    <div className="admin-card" style={{ borderTop: "4px solid var(--color-terracotta)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
                         <span style={{ fontSize: "0.74rem", fontWeight: 700, padding: "3px 8px", borderRadius: "4px", backgroundColor: "var(--color-terracotta-light)", color: "var(--color-terracotta-dark)", textTransform: "uppercase" }}>
-                          Primary Festival Offer
+                          Primary Festival Offer (Offer 01)
                         </span>
-                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" }}>
+                        <label style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          fontSize: "0.82rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          padding: "5px 10px",
+                          borderRadius: "8px",
+                          backgroundColor: primaryOffer.isActive ? "rgba(22, 163, 74, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                          border: primaryOffer.isActive ? "1px solid #86efac" : "1px solid #fca5a5",
+                          color: primaryOffer.isActive ? "#15803d" : "#b91c1c"
+                        }}>
                           <input
                             type="checkbox"
                             checked={primaryOffer.isActive}
-                            onChange={(e) => updatePrimaryOffer({ isActive: e.target.checked })}
+                            onChange={(e) => {
+                              updatePrimaryOffer({ isActive: e.target.checked });
+                              showNotification(e.target.checked ? "Offer 01 is now ACTIVE on homepage! 🎁" : "Offer 01 is DEACTIVATED and hidden from homepage.");
+                            }}
                           />
-                          Active
+                          {primaryOffer.isActive ? "🟢 Active on Homepage" : "🔴 Deactivated (Hidden)"}
                         </label>
                       </div>
 
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                      {!primaryOffer.isActive && (
+                        <div style={{ padding: "0.6rem 0.75rem", borderRadius: "8px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", fontSize: "0.78rem", marginBottom: "1rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
+                          <AlertCircle size={15} color="#b91c1c" />
+                          <span>This offer is deactivated. It will NOT show on the homepage.</span>
+                        </div>
+                      )}
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.95rem" }}>
+                        {/* Select Catalog Product Shortcut */}
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.25rem", color: "var(--color-terracotta)" }}>
+                            Catalog Preset or Single Product Feature
+                          </label>
+                          <select
+                            value={primaryOffer.productId || ""}
+                            onChange={(e) => {
+                              const selectedId = e.target.value;
+                              if (!selectedId) {
+                                updatePrimaryOffer({
+                                  productId: undefined,
+                                  title: DEFAULT_PRIMARY_OFFER.title,
+                                  subtitle: DEFAULT_PRIMARY_OFFER.subtitle,
+                                  description: DEFAULT_PRIMARY_OFFER.description,
+                                  salePrice: DEFAULT_PRIMARY_OFFER.salePrice,
+                                  originalPrice: DEFAULT_PRIMARY_OFFER.originalPrice,
+                                  mainImage: DEFAULT_PRIMARY_OFFER.mainImage,
+                                  badgeText: DEFAULT_PRIMARY_OFFER.badgeText,
+                                  bars: DEFAULT_PRIMARY_OFFER.bars,
+                                });
+                                showNotification("Loaded Default Keepsake Vault Box Preset! ✨");
+                                return;
+                              }
+                              const found = products.find((p) => (p.id || (p as any)._id) === selectedId);
+                              if (found) {
+                                updatePrimaryOffer({
+                                  productId: found.id || (found as any)._id,
+                                  title: found.name,
+                                  subtitle: found.tagline || found.skinType || "Handcrafted Luxury Cold-Process Soap",
+                                  description: found.description || "",
+                                  salePrice: found.price,
+                                  originalPrice: found.originalPrice || Math.round(found.price * 1.33),
+                                  mainImage: found.image,
+                                  badgeText: found.badge || "Signature Selection",
+                                  bars: [
+                                    {
+                                      id: `bar-${found.id || (found as any)._id}`,
+                                      name: found.name,
+                                      aroma: found.fragranceNotes?.join(", ") || "Botanical resins & oils",
+                                      benefit: found.soapBenefits?.[0] || found.tagline || "Nourishing daily cleansing",
+                                      lather: "Velvet Cream Lather",
+                                      botanical: found.keyIngredients?.join(", ") || "Pure botanical extracts",
+                                      weight: found.weight || "120g Bar",
+                                      image: found.image,
+                                    },
+                                  ],
+                                });
+                                showNotification(`Selected "${found.name}" as featured product for Offer 01! ✨`);
+                              }
+                            }}
+                            style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.85rem", fontWeight: 700, backgroundColor: "#ffffff" }}
+                          >
+                            <option value="">-- Custom Keepsake Vault Box (Default Multi-Product Curation) --</option>
+                            {products.map((p) => (
+                              <option key={p.id || (p as any)._id} value={p.id || (p as any)._id}>
+                                Feature Single Product: {p.name} — ₹{p.price}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
                         <div>
                           <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.25rem" }}>Offer Title</label>
                           <input
@@ -3890,6 +4632,366 @@ export default function AdminPage() {
                             onChange={(e) => updatePrimaryOffer({ subtitle: e.target.value })}
                             style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
                           />
+                        </div>
+
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.25rem" }}>Offer Description</label>
+                          <textarea
+                            rows={2}
+                            value={primaryOffer.description || ""}
+                            onChange={(e) => updatePrimaryOffer({ description: e.target.value })}
+                            placeholder="Enter detailed description of this holiday offer..."
+                            style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.86rem", resize: "vertical" }}
+                          />
+                        </div>
+
+                        {/* Image Controls & Preview */}
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.25rem" }}>Offer Main Showcase Image</label>
+                          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.4rem" }}>
+                            <div style={{ position: "relative", width: "54px", height: "54px", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--color-border)", flexShrink: 0, backgroundColor: "#fafafa" }}>
+                              <Image src={primaryOffer.mainImage || CLOUDINARY_IMAGES.dragonsBlood} alt={primaryOffer.title || "Offer"} fill sizes="54px" style={{ objectFit: "cover" }} />
+                            </div>
+                            <input
+                              type="text"
+                              value={primaryOffer.mainImage || ""}
+                              onChange={(e) => updatePrimaryOffer({ mainImage: e.target.value })}
+                              placeholder="Image URL or choose file below..."
+                              style={{ flexGrow: 1, padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.85rem" }}
+                            />
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  if (ev.target?.result) {
+                                    updatePrimaryOffer({ mainImage: ev.target.result as string });
+                                    showNotification(`Uploaded image for ${primaryOffer.title}! ✨`);
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            style={{ fontSize: "0.78rem" }}
+                          />
+                        </div>
+
+                        {/* ── INCLUDED PRODUCTS IN THIS OFFER ── */}
+                        <div style={{ border: "1px solid rgba(199, 92, 56, 0.25)", backgroundColor: "#fffaf8", borderRadius: "10px", padding: "0.85rem", marginTop: "0.35rem" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                            <div>
+                              <h4 style={{ margin: "0 0 2px", fontSize: "0.88rem", fontWeight: 700, color: "var(--color-terracotta-dark)", display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span>🌿 Products Included in Offer</span>
+                                <span style={{ fontSize: "0.72rem", backgroundColor: "var(--color-terracotta)", color: "#fff", padding: "1px 7px", borderRadius: "10px" }}>
+                                  {(primaryOffer.bars || []).length} { (primaryOffer.bars || []).length === 1 ? "Product" : "Products" }
+                                </span>
+                              </h4>
+                              <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--color-text-secondary)" }}>
+                                Customers can view individual photos, aroma notes, and botanical formulas in the banner.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updatePrimaryOffer({ bars: DEFAULT_PRIMARY_OFFER.bars });
+                                showNotification("Reset Offer 01 to Default 4-Bar Keepsake Vault Box! 🎁");
+                              }}
+                              style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--color-terracotta)", background: "transparent", border: "1px solid var(--color-terracotta)", padding: "3px 8px", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                              title="Restore original 4 default keepsake bars"
+                            >
+                              <RefreshCw size={11} /> Reset Defaults
+                            </button>
+                          </div>
+
+                          {/* Quick Add Product from Store Catalog */}
+                          <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginBottom: "0.75rem" }}>
+                            <select
+                              value={selectedPrimaryCatalogId}
+                              onChange={(e) => setSelectedPrimaryCatalogId(e.target.value)}
+                              style={{ flex: 1, padding: "0.45rem 0.65rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.8rem", backgroundColor: "#fff" }}
+                            >
+                              <option value="">+ Add Product from Store Catalog...</option>
+                              {products.map((p) => (
+                                <option key={p.id || (p as any)._id} value={p.id || (p as any)._id}>
+                                  {p.name} (₹{p.price})
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => handleAddCatalogProductToPrimary(selectedPrimaryCatalogId)}
+                              disabled={!selectedPrimaryCatalogId}
+                              style={{
+                                padding: "0.45rem 0.8rem",
+                                borderRadius: "6px",
+                                backgroundColor: selectedPrimaryCatalogId ? "var(--color-terracotta)" : "#d1d5db",
+                                color: "#ffffff",
+                                fontWeight: 700,
+                                fontSize: "0.78rem",
+                                border: "none",
+                                cursor: selectedPrimaryCatalogId ? "pointer" : "not-allowed",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              <Plus size={13} /> Add
+                            </button>
+                          </div>
+
+                          {/* Toggle Add Custom Item */}
+                          <div style={{ marginBottom: "0.75rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setShowAddPrimaryCustom(!showAddPrimaryCustom)}
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                color: "var(--color-terracotta)",
+                                background: "#fff",
+                                border: "1px dashed var(--color-terracotta)",
+                                padding: "4px 10px",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                width: "100%",
+                                justifyContent: "center"
+                              }}
+                            >
+                              <Plus size={13} /> {showAddPrimaryCustom ? "Close Custom Form" : "+ Create Custom Product Formulation"}
+                            </button>
+
+                            {showAddPrimaryCustom && (
+                              <div style={{ marginTop: "0.6rem", padding: "0.75rem", background: "#ffffff", borderRadius: "8px", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                                <div style={{ fontWeight: 700, fontSize: "0.78rem", color: "var(--color-terracotta)" }}>New Custom Product</div>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+                                  <input
+                                    type="text"
+                                    placeholder="Product Name"
+                                    value={newPrimaryCustomBar.name}
+                                    onChange={(e) => setNewPrimaryCustomBar({ ...newPrimaryCustomBar, name: e.target.value })}
+                                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder="Weight (e.g. 120g Bar)"
+                                    value={newPrimaryCustomBar.weight}
+                                    onChange={(e) => setNewPrimaryCustomBar({ ...newPrimaryCustomBar, weight: e.target.value })}
+                                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                  />
+                                </div>
+                                <input
+                                  type="text"
+                                  placeholder="Aroma Notes (e.g. Star Anise, Cinnamon & Clove)"
+                                  value={newPrimaryCustomBar.aroma}
+                                  onChange={(e) => setNewPrimaryCustomBar({ ...newPrimaryCustomBar, aroma: e.target.value })}
+                                  style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Skin Ritual / Benefit (e.g. Warming circulation & deep hydration)"
+                                  value={newPrimaryCustomBar.benefit}
+                                  onChange={(e) => setNewPrimaryCustomBar({ ...newPrimaryCustomBar, benefit: e.target.value })}
+                                  style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                />
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+                                  <input
+                                    type="text"
+                                    placeholder="Lather (e.g. Velvet Warm Foam)"
+                                    value={newPrimaryCustomBar.lather}
+                                    onChange={(e) => setNewPrimaryCustomBar({ ...newPrimaryCustomBar, lather: e.target.value })}
+                                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder="Key Actives (e.g. 24k Gold & Resins)"
+                                    value={newPrimaryCustomBar.botanical}
+                                    onChange={(e) => setNewPrimaryCustomBar({ ...newPrimaryCustomBar, botanical: e.target.value })}
+                                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                  />
+                                </div>
+                                <input
+                                  type="text"
+                                  placeholder="Image URL"
+                                  value={newPrimaryCustomBar.image}
+                                  onChange={(e) => setNewPrimaryCustomBar({ ...newPrimaryCustomBar, image: e.target.value })}
+                                  style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!newPrimaryCustomBar.name.trim()) return;
+                                    const updatedBars = [...(primaryOffer.bars || []), { ...newPrimaryCustomBar, id: `custom-${Date.now()}` }];
+                                    updatePrimaryOffer({ bars: updatedBars });
+                                    setShowAddPrimaryCustom(false);
+                                    showNotification(`Added custom bar "${newPrimaryCustomBar.name}" to Offer 01! ✨`);
+                                  }}
+                                  style={{ padding: "0.45rem", backgroundColor: "var(--color-terracotta)", color: "#fff", fontWeight: 700, fontSize: "0.78rem", border: "none", borderRadius: "6px", cursor: "pointer" }}
+                                >
+                                  Save &amp; Add to Offer
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* List of Products in Offer 01 */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                            {(primaryOffer.bars || []).map((bar, idx) => (
+                              <div
+                                key={bar.id || idx}
+                                style={{
+                                  padding: "0.6rem 0.75rem",
+                                  backgroundColor: "#ffffff",
+                                  borderRadius: "8px",
+                                  border: "1px solid var(--color-border)",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "0.4rem"
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+                                    <div style={{ position: "relative", width: "38px", height: "38px", borderRadius: "6px", overflow: "hidden", border: "1px solid var(--color-border)", flexShrink: 0, backgroundColor: "#fafafa" }}>
+                                      <Image src={bar.image || CLOUDINARY_IMAGES.dragonsBlood} alt={bar.name} fill sizes="38px" style={{ objectFit: "cover" }} />
+                                    </div>
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ fontWeight: 700, fontSize: "0.82rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                        <span style={{ color: "var(--color-terracotta)", marginRight: "5px" }}>0{idx + 1}.</span>
+                                        {bar.name}
+                                      </div>
+                                      <div style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)" }}>
+                                        {bar.weight} • {bar.lather}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: "flex", alignItems: "center", gap: "3px", flexShrink: 0 }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMovePrimaryBar(idx, "up")}
+                                      disabled={idx === 0}
+                                      title="Move up"
+                                      style={{ padding: "3px 6px", border: "1px solid var(--color-border)", borderRadius: "4px", background: "#fff", cursor: idx === 0 ? "not-allowed" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}
+                                    >
+                                      <ArrowUp size={12} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMovePrimaryBar(idx, "down")}
+                                      disabled={idx === (primaryOffer.bars?.length || 1) - 1}
+                                      title="Move down"
+                                      style={{ padding: "3px 6px", border: "1px solid var(--color-border)", borderRadius: "4px", background: "#fff", cursor: idx === (primaryOffer.bars?.length || 1) - 1 ? "not-allowed" : "pointer", opacity: idx === (primaryOffer.bars?.length || 1) - 1 ? 0.3 : 1 }}
+                                    >
+                                      <ArrowDown size={12} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingPrimaryBarIdx(editingPrimaryBarIdx === idx ? null : idx)}
+                                      title="Edit product details"
+                                      style={{ padding: "3px 6px", border: "1px solid var(--color-border)", borderRadius: "4px", background: editingPrimaryBarIdx === idx ? "#fef3c7" : "#fff", cursor: "pointer" }}
+                                    >
+                                      <Pencil size={12} color={editingPrimaryBarIdx === idx ? "#b45309" : "#4b5563"} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemovePrimaryBar(idx)}
+                                      title="Remove product"
+                                      style={{ padding: "3px 6px", border: "1px solid #fecaca", borderRadius: "4px", background: "#fef2f2", cursor: "pointer" }}
+                                    >
+                                      <Trash2 size={12} color="#dc2626" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Inline Editor for this bar */}
+                                {editingPrimaryBarIdx === idx && (
+                                  <div style={{ marginTop: "0.4rem", padding: "0.6rem", background: "#fffaf8", borderRadius: "6px", border: "1px solid rgba(199, 92, 56, 0.2)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "0.4rem" }}>
+                                      <div>
+                                        <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Name</label>
+                                        <input
+                                          type="text"
+                                          value={bar.name}
+                                          onChange={(e) => handleUpdatePrimaryBar(idx, { name: e.target.value })}
+                                          style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Weight</label>
+                                        <input
+                                          type="text"
+                                          value={bar.weight}
+                                          onChange={(e) => handleUpdatePrimaryBar(idx, { weight: e.target.value })}
+                                          style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Aroma Notes</label>
+                                      <input
+                                        type="text"
+                                        value={bar.aroma}
+                                        onChange={(e) => handleUpdatePrimaryBar(idx, { aroma: e.target.value })}
+                                        style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Skin Ritual / Benefits</label>
+                                      <input
+                                        type="text"
+                                        value={bar.benefit}
+                                        onChange={(e) => handleUpdatePrimaryBar(idx, { benefit: e.target.value })}
+                                        style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                      />
+                                    </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+                                      <div>
+                                        <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Lather</label>
+                                        <input
+                                          type="text"
+                                          value={bar.lather}
+                                          onChange={(e) => handleUpdatePrimaryBar(idx, { lather: e.target.value })}
+                                          style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Key Botanicals</label>
+                                        <input
+                                          type="text"
+                                          value={bar.botanical}
+                                          onChange={(e) => handleUpdatePrimaryBar(idx, { botanical: e.target.value })}
+                                          style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Image URL</label>
+                                      <input
+                                        type="text"
+                                        value={bar.image}
+                                        onChange={(e) => handleUpdatePrimaryBar(idx, { image: e.target.value })}
+                                        style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingPrimaryBarIdx(null)}
+                                      style={{ alignSelf: "flex-end", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700, backgroundColor: "var(--color-terracotta)", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                                    >
+                                      Done Editing
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
 
                         <div className="admin-form-row-2">
@@ -3939,31 +5041,117 @@ export default function AdminPage() {
 
                         <button
                           type="button"
-                          onClick={() => showNotification("Primary festival offer saved successfully!")}
-                          style={{ marginTop: "0.5rem", padding: "0.65rem", borderRadius: "8px", backgroundColor: "var(--color-terracotta)", color: "#ffffff", fontWeight: 700, border: "none", cursor: "pointer" }}
+                          onClick={() => showNotification("Primary festival offer saved successfully! Live on homepage ✨")}
+                          style={{ marginTop: "0.35rem", padding: "0.65rem", borderRadius: "8px", backgroundColor: "var(--color-terracotta)", color: "#ffffff", fontWeight: 700, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
                         >
-                          Save Primary Offer
+                          <Check size={16} /> Save Primary Offer
                         </button>
                       </div>
                     </div>
 
-                    {/* Secondary Offer */}
-                    <div className="admin-card">
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                    {/* ─────────────────────────────────────────────────────────────
+                        OFFER 02: SECONDARY ROYAL AYURVEDIC CURATION
+                       ───────────────────────────────────────────────────────────── */}
+                    <div className="admin-card" style={{ borderTop: "4px solid #b45309" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
                         <span style={{ fontSize: "0.74rem", fontWeight: 700, padding: "3px 8px", borderRadius: "4px", backgroundColor: "#fef3c7", color: "#b45309", textTransform: "uppercase" }}>
-                          Secondary Promotional Offer
+                          Secondary Promotional Offer (Offer 02)
                         </span>
-                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" }}>
+                        <label style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          fontSize: "0.82rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          padding: "5px 10px",
+                          borderRadius: "8px",
+                          backgroundColor: secondaryOffer.isActive ? "rgba(22, 163, 74, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                          border: secondaryOffer.isActive ? "1px solid #86efac" : "1px solid #fca5a5",
+                          color: secondaryOffer.isActive ? "#15803d" : "#b91c1c"
+                        }}>
                           <input
                             type="checkbox"
                             checked={secondaryOffer.isActive}
-                            onChange={(e) => updateSecondaryOffer({ isActive: e.target.checked })}
+                            onChange={(e) => {
+                              updateSecondaryOffer({ isActive: e.target.checked });
+                              showNotification(e.target.checked ? "Offer 02 is now ACTIVE on homepage! ✨" : "Offer 02 is DEACTIVATED and hidden from homepage.");
+                            }}
                           />
-                          Active
+                          {secondaryOffer.isActive ? "🟢 Active on Homepage" : "🔴 Deactivated (Hidden)"}
                         </label>
                       </div>
 
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                      {!secondaryOffer.isActive && (
+                        <div style={{ padding: "0.6rem 0.75rem", borderRadius: "8px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", fontSize: "0.78rem", marginBottom: "1rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
+                          <AlertCircle size={15} color="#b91c1c" />
+                          <span>This offer is deactivated. It will NOT show on the homepage.</span>
+                        </div>
+                      )}
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.95rem" }}>
+                        {/* Select Catalog Product Shortcut / Curation Preset */}
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.25rem", color: "#b45309" }}>
+                            Catalog Preset or Single Product Feature
+                          </label>
+                          <select
+                            value={secondaryOffer.productId || ""}
+                            onChange={(e) => {
+                              const selectedId = e.target.value;
+                              if (!selectedId) {
+                                updateSecondaryOffer({
+                                  productId: undefined,
+                                  title: DEFAULT_SECONDARY_OFFER.title,
+                                  subtitle: DEFAULT_SECONDARY_OFFER.subtitle,
+                                  description: DEFAULT_SECONDARY_OFFER.description,
+                                  salePrice: DEFAULT_SECONDARY_OFFER.salePrice,
+                                  originalPrice: DEFAULT_SECONDARY_OFFER.originalPrice,
+                                  mainImage: DEFAULT_SECONDARY_OFFER.mainImage,
+                                  badgeText: DEFAULT_SECONDARY_OFFER.badgeText,
+                                  bars: DEFAULT_SECONDARY_OFFER.bars,
+                                });
+                                showNotification("Loaded Default Royal Ayurvedic Curation Preset! ✨");
+                                return;
+                              }
+                              const found = products.find((p) => (p.id || (p as any)._id) === selectedId);
+                              if (found) {
+                                updateSecondaryOffer({
+                                  productId: found.id || (found as any)._id,
+                                  title: found.name,
+                                  subtitle: found.tagline || found.skinType || "Ayurvedic Heritage Botanical Soap",
+                                  description: found.description || "",
+                                  salePrice: found.price,
+                                  originalPrice: found.originalPrice || Math.round(found.price * 1.33),
+                                  mainImage: found.image,
+                                  badgeText: found.badge || "Heritage Reserve",
+                                  bars: [
+                                    {
+                                      id: `bar-${found.id || (found as any)._id}`,
+                                      name: found.name,
+                                      aroma: found.fragranceNotes?.join(", ") || "Kashmiri saffron & botanicals",
+                                      benefit: found.soapBenefits?.[0] || found.tagline || "Golden radiant complexion",
+                                      lather: "Creamy Custard Lather",
+                                      botanical: found.keyIngredients?.join(", ") || "Grade A Saffron & Fresh Farm Milk",
+                                      weight: found.weight || "125g Bar",
+                                      image: found.image,
+                                    },
+                                  ],
+                                });
+                                showNotification(`Selected "${found.name}" as featured product for Offer 02! ✨`);
+                              }
+                            }}
+                            style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.85rem", fontWeight: 700, backgroundColor: "#ffffff" }}
+                          >
+                            <option value="">-- Custom Royal Ayurvedic Curation (Default Multi-Product Curation) --</option>
+                            {products.map((p) => (
+                              <option key={p.id || (p as any)._id} value={p.id || (p as any)._id}>
+                                Feature Single Product: {p.name} — ₹{p.price}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
                         <div>
                           <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.25rem" }}>Offer Title</label>
                           <input
@@ -3982,6 +5170,366 @@ export default function AdminPage() {
                             onChange={(e) => updateSecondaryOffer({ subtitle: e.target.value })}
                             style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
                           />
+                        </div>
+
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.25rem" }}>Offer Description</label>
+                          <textarea
+                            rows={2}
+                            value={secondaryOffer.description || ""}
+                            onChange={(e) => updateSecondaryOffer({ description: e.target.value })}
+                            placeholder="Enter detailed description of this wellness curation..."
+                            style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.86rem", resize: "vertical" }}
+                          />
+                        </div>
+
+                        {/* Image Controls & Preview */}
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.25rem" }}>Offer Main Showcase Image</label>
+                          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.4rem" }}>
+                            <div style={{ position: "relative", width: "54px", height: "54px", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--color-border)", flexShrink: 0, backgroundColor: "#fafafa" }}>
+                              <Image src={secondaryOffer.mainImage || CLOUDINARY_IMAGES.saffronHoney} alt={secondaryOffer.title || "Offer"} fill sizes="54px" style={{ objectFit: "cover" }} />
+                            </div>
+                            <input
+                              type="text"
+                              value={secondaryOffer.mainImage || ""}
+                              onChange={(e) => updateSecondaryOffer({ mainImage: e.target.value })}
+                              placeholder="Image URL or choose file below..."
+                              style={{ flexGrow: 1, padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.85rem" }}
+                            />
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  if (ev.target?.result) {
+                                    updateSecondaryOffer({ mainImage: ev.target.result as string });
+                                    showNotification(`Uploaded image for ${secondaryOffer.title}! ✨`);
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            style={{ fontSize: "0.78rem" }}
+                          />
+                        </div>
+
+                        {/* ── INCLUDED PRODUCTS IN THIS OFFER ── */}
+                        <div style={{ border: "1px solid rgba(180, 83, 9, 0.28)", backgroundColor: "#fefcf6", borderRadius: "10px", padding: "0.85rem", marginTop: "0.35rem" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                            <div>
+                              <h4 style={{ margin: "0 0 2px", fontSize: "0.88rem", fontWeight: 700, color: "#78350f", display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span>🌿 Products Included in Curation</span>
+                                <span style={{ fontSize: "0.72rem", backgroundColor: "#b45309", color: "#fff", padding: "1px 7px", borderRadius: "10px" }}>
+                                  {(secondaryOffer.bars || []).length} { (secondaryOffer.bars || []).length === 1 ? "Product" : "Products" }
+                                </span>
+                              </h4>
+                              <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--color-text-secondary)" }}>
+                                Manage each product in `-- Custom Royal Ayurvedic Curation (Default) --` or add custom bars.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateSecondaryOffer({ bars: DEFAULT_SECONDARY_OFFER.bars });
+                                showNotification("Reset to Default 3-Bar Royal Ayurvedic Curation! ✨");
+                              }}
+                              style={{ fontSize: "0.72rem", fontWeight: 700, color: "#b45309", background: "transparent", border: "1px solid #b45309", padding: "3px 8px", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                              title="Restore original 3 default Ayurvedic bars (Kashmiri Saffron, Wild Turmeric, Damask Rose)"
+                            >
+                              <RefreshCw size={11} /> Reset Defaults
+                            </button>
+                          </div>
+
+                          {/* Quick Add Product from Store Catalog */}
+                          <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginBottom: "0.75rem" }}>
+                            <select
+                              value={selectedSecondaryCatalogId}
+                              onChange={(e) => setSelectedSecondaryCatalogId(e.target.value)}
+                              style={{ flex: 1, padding: "0.45rem 0.65rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.8rem", backgroundColor: "#fff" }}
+                            >
+                              <option value="">+ Add Product from Store Catalog...</option>
+                              {products.map((p) => (
+                                <option key={p.id || (p as any)._id} value={p.id || (p as any)._id}>
+                                  {p.name} (₹{p.price})
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => handleAddCatalogProductToSecondary(selectedSecondaryCatalogId)}
+                              disabled={!selectedSecondaryCatalogId}
+                              style={{
+                                padding: "0.45rem 0.8rem",
+                                borderRadius: "6px",
+                                backgroundColor: selectedSecondaryCatalogId ? "#b45309" : "#d1d5db",
+                                color: "#ffffff",
+                                fontWeight: 700,
+                                fontSize: "0.78rem",
+                                border: "none",
+                                cursor: selectedSecondaryCatalogId ? "pointer" : "not-allowed",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              <Plus size={13} /> Add
+                            </button>
+                          </div>
+
+                          {/* Toggle Add Custom Item */}
+                          <div style={{ marginBottom: "0.75rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setShowAddSecondaryCustom(!showAddSecondaryCustom)}
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                color: "#b45309",
+                                background: "#fff",
+                                border: "1px dashed #b45309",
+                                padding: "4px 10px",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                width: "100%",
+                                justifyContent: "center"
+                              }}
+                            >
+                              <Plus size={13} /> {showAddSecondaryCustom ? "Close Custom Form" : "+ Create Custom Ayurvedic Formulation"}
+                            </button>
+
+                            {showAddSecondaryCustom && (
+                              <div style={{ marginTop: "0.6rem", padding: "0.75rem", background: "#ffffff", borderRadius: "8px", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                                <div style={{ fontWeight: 700, fontSize: "0.78rem", color: "#b45309" }}>New Ayurvedic Product</div>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+                                  <input
+                                    type="text"
+                                    placeholder="Product Name"
+                                    value={newSecondaryCustomBar.name}
+                                    onChange={(e) => setNewSecondaryCustomBar({ ...newSecondaryCustomBar, name: e.target.value })}
+                                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder="Weight (e.g. 125g Bar)"
+                                    value={newSecondaryCustomBar.weight}
+                                    onChange={(e) => setNewSecondaryCustomBar({ ...newSecondaryCustomBar, weight: e.target.value })}
+                                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                  />
+                                </div>
+                                <input
+                                  type="text"
+                                  placeholder="Aroma Notes (e.g. Kashmiri Saffron & Raw Honey)"
+                                  value={newSecondaryCustomBar.aroma}
+                                  onChange={(e) => setNewSecondaryCustomBar({ ...newSecondaryCustomBar, aroma: e.target.value })}
+                                  style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Skin Ritual / Benefit (e.g. Golden radiance & intense moisture)"
+                                  value={newSecondaryCustomBar.benefit}
+                                  onChange={(e) => setNewSecondaryCustomBar({ ...newSecondaryCustomBar, benefit: e.target.value })}
+                                  style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                />
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+                                  <input
+                                    type="text"
+                                    placeholder="Lather (e.g. Creamy Custard Lather)"
+                                    value={newSecondaryCustomBar.lather}
+                                    onChange={(e) => setNewSecondaryCustomBar({ ...newSecondaryCustomBar, lather: e.target.value })}
+                                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder="Sacred Botanicals (e.g. Grade A Saffron & Fresh Goat Milk)"
+                                    value={newSecondaryCustomBar.botanical}
+                                    onChange={(e) => setNewSecondaryCustomBar({ ...newSecondaryCustomBar, botanical: e.target.value })}
+                                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                  />
+                                </div>
+                                <input
+                                  type="text"
+                                  placeholder="Image URL"
+                                  value={newSecondaryCustomBar.image}
+                                  onChange={(e) => setNewSecondaryCustomBar({ ...newSecondaryCustomBar, image: e.target.value })}
+                                  style={{ padding: "0.4rem 0.6rem", fontSize: "0.78rem", borderRadius: "6px", border: "1px solid var(--color-border)" }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!newSecondaryCustomBar.name.trim()) return;
+                                    const updatedBars = [...(secondaryOffer.bars || []), { ...newSecondaryCustomBar, id: `custom-${Date.now()}` }];
+                                    updateSecondaryOffer({ bars: updatedBars });
+                                    setShowAddSecondaryCustom(false);
+                                    showNotification(`Added custom bar "${newSecondaryCustomBar.name}" to Offer 02! ✨`);
+                                  }}
+                                  style={{ padding: "0.45rem", backgroundColor: "#b45309", color: "#fff", fontWeight: 700, fontSize: "0.78rem", border: "none", borderRadius: "6px", cursor: "pointer" }}
+                                >
+                                  Save &amp; Add to Curation
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* List of Products in Offer 02 */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                            {(secondaryOffer.bars || []).map((bar, idx) => (
+                              <div
+                                key={bar.id || idx}
+                                style={{
+                                  padding: "0.6rem 0.75rem",
+                                  backgroundColor: "#ffffff",
+                                  borderRadius: "8px",
+                                  border: "1px solid var(--color-border)",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "0.4rem"
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+                                    <div style={{ position: "relative", width: "38px", height: "38px", borderRadius: "6px", overflow: "hidden", border: "1px solid var(--color-border)", flexShrink: 0, backgroundColor: "#fafafa" }}>
+                                      <Image src={bar.image || CLOUDINARY_IMAGES.saffronHoney} alt={bar.name} fill sizes="38px" style={{ objectFit: "cover" }} />
+                                    </div>
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ fontWeight: 700, fontSize: "0.82rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                        <span style={{ color: "#b45309", marginRight: "5px" }}>0{idx + 1}.</span>
+                                        {bar.name}
+                                      </div>
+                                      <div style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)" }}>
+                                        {bar.weight} • {bar.lather}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: "flex", alignItems: "center", gap: "3px", flexShrink: 0 }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoveSecondaryBar(idx, "up")}
+                                      disabled={idx === 0}
+                                      title="Move up"
+                                      style={{ padding: "3px 6px", border: "1px solid var(--color-border)", borderRadius: "4px", background: "#fff", cursor: idx === 0 ? "not-allowed" : "pointer", opacity: idx === 0 ? 0.3 : 1 }}
+                                    >
+                                      <ArrowUp size={12} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoveSecondaryBar(idx, "down")}
+                                      disabled={idx === (secondaryOffer.bars?.length || 1) - 1}
+                                      title="Move down"
+                                      style={{ padding: "3px 6px", border: "1px solid var(--color-border)", borderRadius: "4px", background: "#fff", cursor: idx === (secondaryOffer.bars?.length || 1) - 1 ? "not-allowed" : "pointer", opacity: idx === (secondaryOffer.bars?.length || 1) - 1 ? 0.3 : 1 }}
+                                    >
+                                      <ArrowDown size={12} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingSecondaryBarIdx(editingSecondaryBarIdx === idx ? null : idx)}
+                                      title="Edit product details"
+                                      style={{ padding: "3px 6px", border: "1px solid var(--color-border)", borderRadius: "4px", background: editingSecondaryBarIdx === idx ? "#fef3c7" : "#fff", cursor: "pointer" }}
+                                    >
+                                      <Pencil size={12} color={editingSecondaryBarIdx === idx ? "#b45309" : "#4b5563"} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSecondaryBar(idx)}
+                                      title="Remove product"
+                                      style={{ padding: "3px 6px", border: "1px solid #fecaca", borderRadius: "4px", background: "#fef2f2", cursor: "pointer" }}
+                                    >
+                                      <Trash2 size={12} color="#dc2626" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Inline Editor for this bar */}
+                                {editingSecondaryBarIdx === idx && (
+                                  <div style={{ marginTop: "0.4rem", padding: "0.6rem", background: "#fefcf6", borderRadius: "6px", border: "1px solid rgba(180, 83, 9, 0.25)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "0.4rem" }}>
+                                      <div>
+                                        <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Name</label>
+                                        <input
+                                          type="text"
+                                          value={bar.name}
+                                          onChange={(e) => handleUpdateSecondaryBar(idx, { name: e.target.value })}
+                                          style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Weight</label>
+                                        <input
+                                          type="text"
+                                          value={bar.weight}
+                                          onChange={(e) => handleUpdateSecondaryBar(idx, { weight: e.target.value })}
+                                          style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Aroma Notes</label>
+                                      <input
+                                        type="text"
+                                        value={bar.aroma}
+                                        onChange={(e) => handleUpdateSecondaryBar(idx, { aroma: e.target.value })}
+                                        style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Skin Ritual / Benefits</label>
+                                      <input
+                                        type="text"
+                                        value={bar.benefit}
+                                        onChange={(e) => handleUpdateSecondaryBar(idx, { benefit: e.target.value })}
+                                        style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                      />
+                                    </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+                                      <div>
+                                        <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Lather</label>
+                                        <input
+                                          type="text"
+                                          value={bar.lather}
+                                          onChange={(e) => handleUpdateSecondaryBar(idx, { lather: e.target.value })}
+                                          style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Sacred Botanicals</label>
+                                        <input
+                                          type="text"
+                                          value={bar.botanical}
+                                          onChange={(e) => handleUpdateSecondaryBar(idx, { botanical: e.target.value })}
+                                          style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--color-text-secondary)" }}>Image URL</label>
+                                      <input
+                                        type="text"
+                                        value={bar.image}
+                                        onChange={(e) => handleUpdateSecondaryBar(idx, { image: e.target.value })}
+                                        style={{ width: "100%", padding: "0.35rem 0.5rem", fontSize: "0.78rem", borderRadius: "4px", border: "1px solid var(--color-border)" }}
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingSecondaryBarIdx(null)}
+                                      style={{ alignSelf: "flex-end", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700, backgroundColor: "#b45309", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                                    >
+                                      Done Editing
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
 
                         <div className="admin-form-row-2">
@@ -4031,10 +5579,10 @@ export default function AdminPage() {
 
                         <button
                           type="button"
-                          onClick={() => showNotification("Secondary offer saved successfully!")}
-                          style={{ marginTop: "0.5rem", padding: "0.65rem", borderRadius: "8px", backgroundColor: "var(--color-dragon-black)", color: "#ffffff", fontWeight: 700, border: "none", cursor: "pointer" }}
+                          onClick={() => showNotification("Secondary promotional offer saved successfully! Live on homepage ✨")}
+                          style={{ marginTop: "0.35rem", padding: "0.65rem", borderRadius: "8px", backgroundColor: "#b45309", color: "#ffffff", fontWeight: 700, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
                         >
-                          Save Secondary Offer
+                          <Check size={16} /> Save Secondary Offer
                         </button>
                       </div>
                     </div>
@@ -4380,10 +5928,1051 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
+
+              {/* ================================================================ */}
+              {/* VIEW: STORE SETTINGS & MAINTENANCE MODE */}
+              {/* ================================================================ */}
+              {activeTab === "settings" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem", maxWidth: "900px" }}>
+                  {/* Maintenance Mode Card */}
+                  <div className="admin-card" style={{ padding: "1.75rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem", borderBottom: "1px solid var(--color-border)", paddingBottom: "1rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                        <div style={{ width: "42px", height: "42px", borderRadius: "10px", backgroundColor: maintMode ? "rgba(220, 38, 38, 0.12)" : "rgba(34, 197, 94, 0.12)", color: maintMode ? "#dc2626" : "#16a34a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <ShieldAlert size={22} />
+                        </div>
+                        <div>
+                          <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>Maintenance Mode Configuration</h3>
+                          <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+                            When active, regular store visitors see the maintenance screen. Only admins can sign in.
+                          </p>
+                        </div>
+                      </div>
+
+                      <span
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: "999px",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          backgroundColor: maintMode ? "#fee2e2" : "#dcfce7",
+                          color: maintMode ? "#b91c1c" : "#15803d",
+                        }}
+                      >
+                        {maintMode ? "🔴 MAINTENANCE ACTIVE" : "🟢 STOREFRONT LIVE"}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", background: "var(--color-cream-subtle)", padding: "1rem", borderRadius: "10px", border: "1px solid var(--color-border)" }}>
+                        <input
+                          type="checkbox"
+                          checked={maintMode}
+                          onChange={(e) => setMaintMode(e.target.checked)}
+                          style={{ width: "20px", height: "20px", accentColor: "var(--color-terracotta)", cursor: "pointer" }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--color-dragon-black)" }}>
+                            Enable Maintenance Mode (Admins Login Only)
+                          </div>
+                          <div style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                            Block non-admin store traffic immediately. You will still remain logged in and able to manage this backoffice.
+                          </div>
+                        </div>
+                      </label>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                          Maintenance Notice for Visitors
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={maintMsg}
+                          onChange={(e) => setMaintMsg(e.target.value)}
+                          placeholder="e.g. We are currently curating new artisanal cold-process batches. The Star Light atelier will reopen shortly."
+                          style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem", resize: "vertical" }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Numbers & Channels Card */}
+                  <div className="admin-card" style={{ padding: "1.75rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.25rem", borderBottom: "1px solid var(--color-border)", paddingBottom: "1rem" }}>
+                      <div style={{ width: "42px", height: "42px", borderRadius: "10px", backgroundColor: "rgba(225, 113, 89, 0.12)", color: "var(--color-terracotta)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Phone size={22} />
+                      </div>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>Store Contact &amp; WhatsApp Concierge</h3>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+                          Update merchant phone numbers and WhatsApp concierge used across the entire website.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem", marginBottom: "1.5rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                          WhatsApp Concierge Number
+                        </label>
+                        <input
+                          type="text"
+                          value={whatsappNum}
+                          onChange={(e) => setWhatsappNum(e.target.value)}
+                          placeholder="e.g. 919876543210"
+                          style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                        />
+                        <div style={{ fontSize: "0.74rem", color: "var(--color-text-tertiary)", marginTop: "4px" }}>
+                          Format: Country code + digits without &apos;+&apos; or spaces (e.g. 919876543210).
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                          Store Phone Number (Display &amp; Calling)
+                        </label>
+                        <input
+                          type="text"
+                          value={contactPh}
+                          onChange={(e) => setContactPh(e.target.value)}
+                          placeholder="e.g. +91 98765 43210"
+                          style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                        />
+                        <div style={{ fontSize: "0.74rem", color: "var(--color-text-tertiary)", marginTop: "4px" }}>
+                          Displayed on the Footer, Contact Page, and GST Tax Invoices.
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                          Customer Concierge Email
+                        </label>
+                        <input
+                          type="email"
+                          value={contactEm}
+                          onChange={(e) => setContactEm(e.target.value)}
+                          placeholder="care@starlightsoaps.com"
+                          style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Social Media Links */}
+                    <div style={{ marginTop: "1.5rem", paddingTop: "1.25rem", borderTop: "1px dashed var(--color-border)" }}>
+                      <h4 style={{ margin: "0 0 1rem", fontSize: "0.95rem", fontWeight: 700, color: "var(--color-dragon-black)" }}>
+                        Social Media Channels (Footer Icons)
+                      </h4>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem", marginBottom: "1.5rem" }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                            Instagram URL
+                          </label>
+                          <input
+                            type="text"
+                            value={socialInsta}
+                            onChange={(e) => setSocialInsta(e.target.value)}
+                            placeholder="https://instagram.com/starlightsoaps"
+                            style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                            Facebook URL
+                          </label>
+                          <input
+                            type="text"
+                            value={socialFb}
+                            onChange={(e) => setSocialFb(e.target.value)}
+                            placeholder="https://facebook.com/starlightsoaps"
+                            style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                            X / Twitter URL
+                          </label>
+                          <input
+                            type="text"
+                            value={socialTwitter}
+                            onChange={(e) => setSocialTwitter(e.target.value)}
+                            placeholder="https://x.com/starlightsoaps"
+                            style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          disabled={isSavingSettings}
+                          onClick={async () => {
+                            setIsSavingSettings(true);
+                            try {
+                              await updateSiteSettings({
+                                maintenanceMode: maintMode,
+                                maintenanceMessage: maintMsg.trim(),
+                                whatsappNumber: whatsappNum.trim(),
+                                contactPhone: contactPh.trim(),
+                                contactEmail: contactEm.trim(),
+                                socialLinks: {
+                                  instagram: socialInsta.trim(),
+                                  facebook: socialFb.trim(),
+                                  twitter: socialTwitter.trim(),
+                                },
+                              });
+                              try {
+                                localStorage.setItem("starlight_whatsapp_number", whatsappNum.trim());
+                              } catch {}
+                              showNotification("Settings & Social Channels updated successfully!");
+                            } catch {
+                              showNotification("Failed to update settings", "error");
+                            } finally {
+                              setIsSavingSettings(false);
+                            }
+                          }}
+                          style={{
+                            padding: "0.75rem 1.5rem",
+                            borderRadius: "8px",
+                            backgroundColor: "var(--color-terracotta)",
+                            color: "#ffffff",
+                            border: "none",
+                            fontWeight: 700,
+                            fontSize: "0.9rem",
+                            cursor: isSavingSettings ? "wait" : "pointer",
+                            boxShadow: "0 4px 12px var(--color-terracotta-glow)",
+                          }}
+                        >
+                          {isSavingSettings ? "Saving Settings..." : "Save Store Settings & Social Links"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("seo")}
+                          style={{
+                            padding: "0.75rem 1.25rem",
+                            borderRadius: "8px",
+                            backgroundColor: "transparent",
+                            color: "var(--color-terracotta)",
+                            border: "1.5px solid var(--color-terracotta)",
+                            fontWeight: 700,
+                            fontSize: "0.88rem",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <Globe size={16} /> Manage SEO &amp; Schema →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+              )}
+
+              {/* ================================================================ */}
+              {/* VIEW: SEO & SCHEMA (Google Structured Data & Metadata) */}
+              {/* ================================================================ */}
+              {activeTab === "seo" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "2rem", maxWidth: "980px" }}>
+                  {/* Header Intro Card */}
+                  <div className="admin-card" style={{ padding: "1.75rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem", borderBottom: "1px solid var(--color-border)", paddingBottom: "1rem" }}>
+                      <div>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "3px 10px", borderRadius: "100px", backgroundColor: "rgba(225, 113, 89, 0.12)", color: "var(--color-terracotta)", fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", marginBottom: "6px" }}>
+                          <Globe size={13} /> Search Engine Optimization &amp; Schema
+                        </div>
+                        <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>Google SEO &amp; JSON-LD Schema Manager</h3>
+                        <p style={{ margin: "4px 0 0", fontSize: "0.84rem", color: "var(--color-text-secondary)" }}>
+                          Control site titles, meta descriptions, search keywords, and Google Structured Data (JSON-LD Organization, WebSite &amp; Store Schemas) rendered across the website.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Live Google Search Preview */}
+                    <div style={{ background: "#f8f9fa", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "1.25rem", marginBottom: "1.5rem" }}>
+                      <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
+                        Live Google Search Result Preview
+                      </div>
+                      <div style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "1rem", maxWidth: "600px" }}>
+                        <div style={{ fontSize: "0.78rem", color: "#202124", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                          <span style={{ fontWeight: 600 }}>https://starlightsoaps.com</span>
+                          <span style={{ color: "#70757a" }}>› artisanal-soaps</span>
+                        </div>
+                        <div style={{ color: "#1a0dab", fontSize: "1.15rem", fontWeight: 600, lineHeight: 1.3, marginBottom: "4px", cursor: "pointer" }}>
+                          {seoTitle || "STAR LIGHT CO. | Luxury Handcrafted Cold-Process Artisanal Soaps"}
+                        </div>
+                        <div style={{ fontSize: "0.85rem", color: "#4d5156", lineHeight: 1.4 }}>
+                          {seoDesc || "Discover Star Light Co. artisanal cold-processed luxury soaps. Hand-poured with sacred Dragon's Blood resin, organic botanical extracts, and nourishing plant lipids."}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Metadata Settings */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem", marginBottom: "2rem" }}>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.45rem" }}>
+                          <label style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--color-dragon-black)" }}>
+                            Global Meta Title (Browser &amp; Google Title)
+                          </label>
+                          <span style={{ fontSize: "0.75rem", color: seoTitle.length > 60 ? "#e11d48" : "var(--color-text-tertiary)" }}>
+                            {seoTitle.length}/60 chars (Recommended: 50-60)
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          value={seoTitle}
+                          onChange={(e) => setSeoTitle(e.target.value)}
+                          placeholder="STAR LIGHT CO. | Luxury Handcrafted Cold-Process Artisanal Soaps"
+                          style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                        />
+                      </div>
+
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.45rem" }}>
+                          <label style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--color-dragon-black)" }}>
+                            Global Meta Description
+                          </label>
+                          <span style={{ fontSize: "0.75rem", color: seoDesc.length > 160 ? "#e11d48" : "var(--color-text-tertiary)" }}>
+                            {seoDesc.length}/160 chars (Recommended: 140-160)
+                          </span>
+                        </div>
+                        <textarea
+                          rows={3}
+                          value={seoDesc}
+                          onChange={(e) => setSeoDesc(e.target.value)}
+                          placeholder="Discover Star Light Co. artisanal cold-processed luxury soaps..."
+                          style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem", resize: "vertical" }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.84rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                          Search Meta Keywords (Comma Separated)
+                        </label>
+                        <input
+                          type="text"
+                          value={seoKeywords}
+                          onChange={(e) => setSeoKeywords(e.target.value)}
+                          placeholder="artisan soap, cold process soap, dragon's blood soap, luxury soap bar, ayurvedic soap"
+                          style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Structured Data & Schema Settings */}
+                    <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "1.5rem", marginBottom: "1.75rem" }}>
+                      <h4 style={{ margin: "0 0 0.5rem", fontSize: "1rem", fontWeight: 700 }}>
+                        Structured Data Attributes (Organization, WebSite &amp; Store)
+                      </h4>
+                      <p style={{ margin: "0 0 1.25rem", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+                        These values feed Google Rich Results, knowledge graph cards, and local store listings.
+                      </p>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem" }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                            Organization / Brand Name
+                          </label>
+                          <input
+                            type="text"
+                            value={seoOrgName}
+                            onChange={(e) => setSeoOrgName(e.target.value)}
+                            placeholder="Star Light Co."
+                            style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                            Brand Slogan / Rich Snippet Tagline
+                          </label>
+                          <input
+                            type="text"
+                            value={seoBrandTagline}
+                            onChange={(e) => setSeoBrandTagline(e.target.value)}
+                            placeholder="Luxury Cold-Process Soaps & Botanical Skincare"
+                            style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                            Rich Snippets Support Phone
+                          </label>
+                          <input
+                            type="text"
+                            value={seoPhone}
+                            onChange={(e) => setSeoPhone(e.target.value)}
+                            placeholder="+91 98765 43210"
+                            style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                            Rich Snippets Support Email
+                          </label>
+                          <input
+                            type="email"
+                            value={seoEmail}
+                            onChange={(e) => setSeoEmail(e.target.value)}
+                            placeholder="orders@starlight.co.in"
+                            style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.45rem", color: "var(--color-dragon-black)" }}>
+                            Price Range Schema Indicator
+                          </label>
+                          <input
+                            type="text"
+                            value={seoPriceRange}
+                            onChange={(e) => setSeoPriceRange(e.target.value)}
+                            placeholder="₹299 - ₹2499"
+                            style={{ width: "100%", padding: "0.75rem 0.95rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.9rem" }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pro Custom JSON-LD Override Editor */}
+                    <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "1.5rem", marginBottom: "1.75rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
+                            Custom JSON-LD Schema (Pro Override)
+                          </h4>
+                          <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+                            Directly paste custom schema.org JSON-LD scripts (e.g. custom WebSite, FAQPage, Organization, or BreadcrumbList).
+                          </p>
+                        </div>
+
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", background: seoCustomEnabled ? "rgba(225, 113, 89, 0.15)" : "#f1f5f9", padding: "6px 12px", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
+                          <input
+                            type="checkbox"
+                            checked={seoCustomEnabled}
+                            onChange={(e) => setSeoCustomEnabled(e.target.checked)}
+                            style={{ accentColor: "var(--color-terracotta)", cursor: "pointer" }}
+                          />
+                          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: seoCustomEnabled ? "var(--color-terracotta)" : "var(--color-dragon-black)" }}>
+                            {seoCustomEnabled ? "Custom Schema ACTIVE" : "Use Standard Generated Schemas"}
+                          </span>
+                        </label>
+                      </div>
+
+                      {seoCustomEnabled && (
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const template = JSON.stringify(
+                                  {
+                                    "@context": "https://schema.org",
+                                    "@graph": [
+                                      {
+                                        "@type": "Organization",
+                                        "@id": "https://starlightsoaps.com/#organization",
+                                        name: seoOrgName || "Star Light Co.",
+                                        url: "https://starlightsoaps.com",
+                                        logo: CLOUDINARY_IMAGES.logo,
+                                        image: CLOUDINARY_IMAGES.banner,
+                                        description: seoDesc,
+                                        telephone: seoPhone,
+                                        email: seoEmail,
+                                        priceRange: seoPriceRange,
+                                        address: {
+                                          "@type": "PostalAddress",
+                                          streetAddress: "Artisanal Atelier",
+                                          addressLocality: "Mumbai",
+                                          addressRegion: "Maharashtra",
+                                          postalCode: "400001",
+                                          addressCountry: "IN",
+                                        },
+                                      },
+                                      {
+                                        "@type": "WebSite",
+                                        "@id": "https://starlightsoaps.com/#website",
+                                        url: "https://starlightsoaps.com",
+                                        name: seoTitle,
+                                        publisher: {
+                                          "@id": "https://starlightsoaps.com/#organization",
+                                        },
+                                        potentialAction: {
+                                          "@type": "SearchAction",
+                                          target: {
+                                            "@type": "EntryPoint",
+                                            urlTemplate: "https://starlightsoaps.com/?search={search_term_string}",
+                                          },
+                                          "query-input": "required name=search_term_string",
+                                        },
+                                      },
+                                      {
+                                        "@type": "Store",
+                                        "@id": "https://starlightsoaps.com/#store",
+                                        name: `${seoOrgName || "Star Light Co."} Atelier`,
+                                        url: "https://starlightsoaps.com",
+                                        logo: CLOUDINARY_IMAGES.logo,
+                                        image: CLOUDINARY_IMAGES.heroArtisan,
+                                        telephone: seoPhone,
+                                        currenciesAccepted: "INR",
+                                        paymentAccepted: "Credit Card, Debit Card, UPI, Net Banking, Cash on Delivery",
+                                        priceRange: seoPriceRange,
+                                      },
+                                    ],
+                                  },
+                                  null,
+                                  2
+                                );
+                                setSeoCustomJson(template);
+                                setSeoValidationMessage({ text: "Loaded standard Star Light schema template! ✨", isError: false });
+                              }}
+                              style={{
+                                padding: "5px 12px",
+                                borderRadius: "6px",
+                                border: "1px solid var(--color-border)",
+                                backgroundColor: "var(--color-cream-subtle)",
+                                fontSize: "0.78rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Load Recommended Template
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!seoCustomJson.trim()) {
+                                  setSeoValidationMessage({ text: "Please enter JSON schema code to validate.", isError: true });
+                                  return;
+                                }
+                                try {
+                                  JSON.parse(seoCustomJson.trim());
+                                  setSeoValidationMessage({ text: "Valid JSON schema syntax! Ready for Google Search. ✓", isError: false });
+                                } catch (err: any) {
+                                  setSeoValidationMessage({ text: `Invalid JSON syntax: ${err.message}`, isError: true });
+                                }
+                              }}
+                              style={{
+                                padding: "5px 12px",
+                                borderRadius: "6px",
+                                border: "1px solid var(--color-border)",
+                                backgroundColor: "var(--color-cream-subtle)",
+                                fontSize: "0.78rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Validate JSON Syntax
+                            </button>
+                          </div>
+
+                          {seoValidationMessage && (
+                            <div
+                              style={{
+                                padding: "8px 12px",
+                                borderRadius: "6px",
+                                fontSize: "0.78rem",
+                                fontWeight: 600,
+                                marginBottom: "8px",
+                                backgroundColor: seoValidationMessage.isError ? "#fee2e2" : "#ecfdf5",
+                                color: seoValidationMessage.isError ? "#dc2626" : "#059669",
+                                border: `1px solid ${seoValidationMessage.isError ? "#fecaca" : "#a7f3d0"}`,
+                              }}
+                            >
+                              {seoValidationMessage.text}
+                            </div>
+                          )}
+
+                          <textarea
+                            rows={12}
+                            value={seoCustomJson}
+                            onChange={(e) => {
+                              setSeoCustomJson(e.target.value);
+                              setSeoValidationMessage(null);
+                            }}
+                            placeholder='{\n  "@context": "https://schema.org",\n  "@type": "Organization",\n  ...\n}'
+                            style={{
+                              width: "100%",
+                              fontFamily: "monospace",
+                              fontSize: "0.82rem",
+                              padding: "0.85rem",
+                              borderRadius: "8px",
+                              border: "1px solid var(--color-border)",
+                              backgroundColor: "#0d131f",
+                              color: "#e2e8f0",
+                              lineHeight: 1.45,
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action button */}
+                    <div style={{ display: "flex", gap: "1rem" }}>
+                      <button
+                        type="button"
+                        disabled={isSavingSeo}
+                        onClick={async () => {
+                          if (seoCustomEnabled && seoCustomJson.trim()) {
+                            try {
+                              JSON.parse(seoCustomJson.trim());
+                            } catch (err: any) {
+                              showNotification(`JSON syntax error: ${err.message}`, "error");
+                              return;
+                            }
+                          }
+                          setIsSavingSeo(true);
+                          try {
+                            await updateSiteSettings({
+                              seo: {
+                                metaTitle: seoTitle.trim(),
+                                metaDescription: seoDesc.trim(),
+                                metaKeywords: seoKeywords.trim(),
+                                organizationName: seoOrgName.trim(),
+                                brandTagline: seoBrandTagline.trim(),
+                                storeTelephone: seoPhone.trim(),
+                                storeEmail: seoEmail.trim(),
+                                priceRange: seoPriceRange.trim(),
+                                enableCustomSchema: seoCustomEnabled,
+                                customSchemaJson: seoCustomJson.trim(),
+                              },
+                            });
+                            showNotification("SEO Metadata & Google Schema saved successfully! 🚀");
+                          } catch {
+                            showNotification("Failed to save SEO settings", "error");
+                          } finally {
+                            setIsSavingSeo(false);
+                          }
+                        }}
+                        style={{
+                          padding: "0.75rem 1.6rem",
+                          borderRadius: "8px",
+                          backgroundColor: "var(--color-terracotta)",
+                          color: "#ffffff",
+                          border: "none",
+                          fontWeight: 700,
+                          fontSize: "0.92rem",
+                          cursor: isSavingSeo ? "wait" : "pointer",
+                          boxShadow: "0 4px 12px var(--color-terracotta-glow)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <Globe size={18} />
+                        {isSavingSeo ? "Saving SEO & Schema..." : "Save SEO & Schema Settings"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ================================================================ */}
+              {/* VIEW: RITUALS & PHILOSOPHY (The Art of Cold-Process) */}
+              {/* ================================================================ */}
+              {activeTab === "rituals" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "2rem", maxWidth: "980px" }}>
+                  <div className="admin-card" style={{ padding: "1.75rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem", borderBottom: "1px solid var(--color-border)", paddingBottom: "1rem" }}>
+                      <div>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "3px 10px", borderRadius: "100px", backgroundColor: "rgba(122, 140, 107, 0.15)", color: "var(--color-sage-deep)", fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", marginBottom: "6px" }}>
+                          <Sparkles size={13} /> Saponification Philosophy
+                        </div>
+                        <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>The Art of True Cold-Process Saponification</h3>
+                        <p style={{ margin: "4px 0 0", fontSize: "0.84rem", color: "var(--color-text-secondary)" }}>
+                          Manage the 4 core philosophy pillars and botanical narrative displayed on the storefront.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newPillars = [
+                            ...ritualPillars,
+                            {
+                              id: "p_" + Date.now(),
+                              iconName: "Leaf",
+                              title: "New Botanical Principle",
+                              desc: "Enter description of this cold-process ingredient, curing time, or technique...",
+                            },
+                          ];
+                          setRitualPillars(newPillars);
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "0.6rem 1.1rem",
+                          borderRadius: "8px",
+                          backgroundColor: "var(--color-dragon-black)",
+                          color: "#ffffff",
+                          border: "none",
+                          fontSize: "0.82rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Plus size={16} /> Add Principle Card
+                      </button>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem", marginBottom: "1.25rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                          Section Eyebrow Tag
+                        </label>
+                        <input
+                          type="text"
+                          value={ritualTag}
+                          onChange={(e) => setRitualTag(e.target.value)}
+                          style={{ width: "100%", padding: "0.65rem 0.85rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                          Section Main Headline
+                        </label>
+                        <input
+                          type="text"
+                          value={ritualTitle}
+                          onChange={(e) => setRitualTitle(e.target.value)}
+                          style={{ width: "100%", padding: "0.65rem 0.85rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: "1.75rem" }}>
+                      <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                        Section Subtitle / Narrative
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={ritualSubtitle}
+                        onChange={(e) => setRitualSubtitle(e.target.value)}
+                        style={{ width: "100%", padding: "0.65rem 0.85rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
+                      />
+                    </div>
+
+                    <h4 style={{ margin: "0 0 0.85rem", fontSize: "0.95rem", fontWeight: 700 }}>Philosophy Principles &amp; Cards ({ritualPillars.length})</h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", marginBottom: "1.5rem" }}>
+                      {ritualPillars.map((p, idx) => (
+                        <div key={p.id || idx} style={{ padding: "1rem", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-cream-subtle)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexGrow: 1, minWidth: "220px" }}>
+                              <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--color-terracotta)", padding: "2px 8px", borderRadius: "4px", backgroundColor: "rgba(225, 113, 89, 0.12)" }}>#{idx + 1}</span>
+                              <input
+                                type="text"
+                                value={p.title}
+                                placeholder="Principle Title..."
+                                onChange={(e) => {
+                                  const updated = [...ritualPillars];
+                                  updated[idx] = { ...updated[idx], title: e.target.value };
+                                  setRitualPillars(updated);
+                                }}
+                                style={{ flexGrow: 1, padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontWeight: 700, fontSize: "0.88rem" }}
+                              />
+                            </div>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <select
+                                value={p.iconName || "Leaf"}
+                                onChange={(e) => {
+                                  const updated = [...ritualPillars];
+                                  updated[idx] = { ...updated[idx], iconName: e.target.value };
+                                  setRitualPillars(updated);
+                                }}
+                                style={{ padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.82rem" }}
+                              >
+                                <option value="Leaf">🌿 Leaf</option>
+                                <option value="Flame">🔥 Flame</option>
+                                <option value="Droplet">💧 Droplet</option>
+                                <option value="PackageCheck">📦 PackageCheck</option>
+                                <option value="Sparkles">✨ Sparkles</option>
+                                <option value="ShieldCheck">🛡️ ShieldCheck</option>
+                              </select>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRitualPillars(ritualPillars.filter((_, i) => i !== idx));
+                                }}
+                                style={{ padding: "6px", border: "none", background: "transparent", color: "#dc2626", cursor: "pointer" }}
+                                title="Delete pillar"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <textarea
+                            rows={2}
+                            value={p.desc}
+                            placeholder="Principle description..."
+                            onChange={(e) => {
+                              const updated = [...ritualPillars];
+                              updated[idx] = { ...updated[idx], desc: e.target.value };
+                              setRitualPillars(updated);
+                            }}
+                            style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.84rem" }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isSavingRituals}
+                      onClick={async () => {
+                        setIsSavingRituals(true);
+                        try {
+                          await updateSiteSettings({
+                            ritualSection: {
+                              tag: ritualTag.trim(),
+                              title: ritualTitle.trim(),
+                              subtitle: ritualSubtitle.trim(),
+                              pillars: ritualPillars,
+                            },
+                          });
+                          showNotification("Cold-Process Philosophy saved successfully!");
+                        } catch {
+                          showNotification("Failed to save Philosophy section", "error");
+                        } finally {
+                          setIsSavingRituals(false);
+                        }
+                      }}
+                      style={{
+                        padding: "0.75rem 1.5rem",
+                        borderRadius: "8px",
+                        backgroundColor: "var(--color-dragon-black)",
+                        color: "#ffffff",
+                        border: "none",
+                        fontWeight: 700,
+                        fontSize: "0.88rem",
+                        cursor: isSavingRituals ? "wait" : "pointer",
+                      }}
+                    >
+                      {isSavingRituals ? "Saving Philosophy..." : "Save Philosophy Section"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ================================================================ */}
+              {/* VIEW: SKIN STORIES & REVIEWS */}
+              {/* ================================================================ */}
+              {activeTab === "reviews" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "2rem", maxWidth: "980px" }}>
+                  <div className="admin-card" style={{ padding: "1.75rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem", borderBottom: "1px solid var(--color-border)", paddingBottom: "1rem" }}>
+                      <div>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "3px 10px", borderRadius: "100px", backgroundColor: "rgba(225, 113, 89, 0.12)", color: "var(--color-terracotta)", fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", marginBottom: "6px" }}>
+                          <Star size={13} fill="var(--color-terracotta)" /> Patron Testimonials
+                        </div>
+                        <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>Skin Stories from Our Community</h3>
+                        <p style={{ margin: "4px 0 0", fontSize: "0.84rem", color: "var(--color-text-secondary)" }}>
+                          Curate authentic customer experiences, ratings, and verified reviews displayed on the storefront.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newReviews = [
+                            ...customerReviews,
+                            {
+                              id: "r_" + Date.now(),
+                              name: "New Patron",
+                              location: "Mumbai, India",
+                              verified: true,
+                              soapPurchased: "Dragon's Blood & Smoked Amber",
+                              rating: 5,
+                              review: "“Write an inspiring customer story here...”",
+                              initials: "NP",
+                            },
+                          ];
+                          setCustomerReviews(newReviews);
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "0.6rem 1.1rem",
+                          borderRadius: "8px",
+                          backgroundColor: "var(--color-terracotta)",
+                          color: "#ffffff",
+                          border: "none",
+                          fontSize: "0.82rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          boxShadow: "0 4px 12px var(--color-terracotta-glow)",
+                        }}
+                      >
+                        <Plus size={16} /> Add Customer Story
+                      </button>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem", marginBottom: "1.25rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                          Section Eyebrow Tag
+                        </label>
+                        <input
+                          type="text"
+                          value={reviewsTag}
+                          onChange={(e) => setReviewsTag(e.target.value)}
+                          style={{ width: "100%", padding: "0.65rem 0.85rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                          Section Main Headline
+                        </label>
+                        <input
+                          type="text"
+                          value={reviewsTitle}
+                          onChange={(e) => setReviewsTitle(e.target.value)}
+                          style={{ width: "100%", padding: "0.65rem 0.85rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: "1.75rem" }}>
+                      <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                        Section Subtitle
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={reviewsSubtitle}
+                        onChange={(e) => setReviewsSubtitle(e.target.value)}
+                        style={{ width: "100%", padding: "0.65rem 0.85rem", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.88rem" }}
+                      />
+                    </div>
+
+                    <h4 style={{ margin: "0 0 0.85rem", fontSize: "0.95rem", fontWeight: 700 }}>Customer Reviews ({customerReviews.length})</h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1.5rem" }}>
+                      {customerReviews.map((rev, idx) => (
+                        <div key={rev.id || idx} style={{ padding: "1.15rem", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-cream-subtle)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr)) 36px", gap: "0.65rem", alignItems: "center" }}>
+                            <input
+                              type="text"
+                              value={rev.name}
+                              placeholder="Customer Name"
+                              onChange={(e) => {
+                                const updated = [...customerReviews];
+                                updated[idx] = { ...updated[idx], name: e.target.value };
+                                setCustomerReviews(updated);
+                              }}
+                              style={{ padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontWeight: 700, fontSize: "0.85rem" }}
+                            />
+                            <input
+                              type="text"
+                              value={rev.location}
+                              placeholder="City, State"
+                              onChange={(e) => {
+                                const updated = [...customerReviews];
+                                updated[idx] = { ...updated[idx], location: e.target.value };
+                                setCustomerReviews(updated);
+                              }}
+                              style={{ padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.82rem" }}
+                            />
+                            <input
+                              type="text"
+                              value={rev.soapPurchased}
+                              placeholder="Soap Purchased"
+                              onChange={(e) => {
+                                const updated = [...customerReviews];
+                                updated[idx] = { ...updated[idx], soapPurchased: e.target.value };
+                                setCustomerReviews(updated);
+                              }}
+                              style={{ padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.82rem" }}
+                            />
+                            <select
+                              value={rev.rating || 5}
+                              onChange={(e) => {
+                                const updated = [...customerReviews];
+                                updated[idx] = { ...updated[idx], rating: Number(e.target.value) };
+                                setCustomerReviews(updated);
+                              }}
+                              style={{ padding: "0.5rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.82rem", fontWeight: 700 }}
+                            >
+                              <option value={5}>⭐⭐⭐⭐⭐ (5 Stars)</option>
+                              <option value={4}>⭐⭐⭐⭐ (4 Stars)</option>
+                              <option value={3}>⭐⭐⭐ (3 Stars)</option>
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCustomerReviews(customerReviews.filter((_, i) => i !== idx));
+                              }}
+                              style={{ padding: "6px", border: "none", background: "transparent", color: "#dc2626", cursor: "pointer", justifySelf: "center" }}
+                              title="Delete review"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+
+                          <textarea
+                            rows={3}
+                            value={rev.review}
+                            placeholder="Write customer review..."
+                            onChange={(e) => {
+                              const updated = [...customerReviews];
+                              updated[idx] = { ...updated[idx], review: e.target.value };
+                              setCustomerReviews(updated);
+                            }}
+                            style={{ width: "100%", padding: "0.6rem 0.85rem", borderRadius: "6px", border: "1px solid var(--color-border)", fontSize: "0.86rem" }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isSavingReviews}
+                      onClick={async () => {
+                        setIsSavingReviews(true);
+                        try {
+                          await updateSiteSettings({
+                            reviewsSection: {
+                              tag: reviewsTag.trim(),
+                              title: reviewsTitle.trim(),
+                              subtitle: reviewsSubtitle.trim(),
+                              reviews: customerReviews,
+                            },
+                          });
+                          showNotification("Skin Stories & Reviews saved successfully!");
+                        } catch {
+                          showNotification("Failed to save stories", "error");
+                        } finally {
+                          setIsSavingReviews(false);
+                        }
+                      }}
+                      style={{
+                        padding: "0.75rem 1.5rem",
+                        borderRadius: "8px",
+                        backgroundColor: "var(--color-terracotta)",
+                        color: "#ffffff",
+                        border: "none",
+                        fontWeight: 700,
+                        fontSize: "0.88rem",
+                        cursor: isSavingReviews ? "wait" : "pointer",
+                        boxShadow: "0 4px 12px var(--color-terracotta-glow)",
+                      }}
+                    >
+                      {isSavingReviews ? "Saving Reviews..." : "Save Skin Stories & Reviews"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </main>
       </div>
+
 
       {/* ================================================================ */}
       {/* ORDER DETAILS INSPECTION MODAL */}

@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { useCart } from "@/context/CartContext";
+import { CLOUDINARY_IMAGES } from "@/data/cloudinaryImages";
 
 export default function FollowUsSection() {
   const { showToast } = useCart();
@@ -23,7 +24,7 @@ export default function FollowUsSection() {
           {/* Dragon Logo Crest */}
           <div className="follow-dragon-crest">
             <Image
-              src="/images/logo.png"
+              src={CLOUDINARY_IMAGES.logo}
               alt="Star Light Co. Dragon Crest"
               width={96}
               height={96}
